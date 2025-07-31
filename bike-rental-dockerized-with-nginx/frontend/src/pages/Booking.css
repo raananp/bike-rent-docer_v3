@@ -1,61 +1,91 @@
+/* Main container spacing */
 .booking-container {
-  padding: 20px;
-  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  padding: 100px 20px 40px 20px; /* top padding accounts for fixed navbar */
+  max-width: 900px;
+  margin: 0 auto;
+  font-family: Arial, sans-serif;
 }
 
+/* Form layout */
 .booking-form {
   display: flex;
   flex-wrap: wrap;
-  gap: 10px;
-  margin-bottom: 20px;
+  gap: 15px;
+  margin-bottom: 40px;
+  background-color: #f9f9f9;
+  padding: 20px;
+  border-radius: 8px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
 }
 
-.booking-form input,
-.booking-form button {
+/* Input and select styling */
+.booking-form input[type="text"],
+.booking-form input[type="date"],
+.booking-form input[type="number"],
+.booking-form select {
+  flex: 1 1 250px;
   padding: 10px;
-  font-size: 14px;
   border: 1px solid #ccc;
-  border-radius: 4px;
+  border-radius: 6px;
 }
 
+/* Checkbox label style */
+.booking-form .checkbox {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1 1 100%;
+  font-size: 0.95rem;
+}
+
+/* File uploads section */
+.file-uploads {
+  display: flex;
+  gap: 20px;
+  flex: 1 1 100%;
+}
+
+.file-uploads label {
+  display: flex;
+  flex-direction: column;
+  font-size: 0.95rem;
+}
+
+/* Submit button */
 .booking-form button {
+  padding: 10px 25px;
+  margin-top: 10px;
   background-color: #007bff;
   color: white;
   border: none;
+  border-radius: 6px;
   cursor: pointer;
-  transition: background 0.3s;
+  transition: background-color 0.3s ease;
 }
 
 .booking-form button:hover {
   background-color: #0056b3;
 }
 
+/* Table styles */
 .booking-table {
   width: 100%;
   border-collapse: collapse;
-  margin-top: 15px;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-  border-radius: 8px;
-  overflow: hidden;
+  margin-top: 20px;
 }
 
 .booking-table th,
 .booking-table td {
-  padding: 12px 16px;
-  text-align: left;
+  padding: 12px 10px;
   border: 1px solid #ddd;
+  text-align: left;
 }
 
 .booking-table th {
-  background-color: #f9f9f9;
+  background-color: #f0f0f0;
   font-weight: bold;
-  color: #333;
 }
 
 .booking-table tr:nth-child(even) {
-  background-color: #f4f8fb;
-}
-
-.booking-table tr:hover {
-  background-color: #e6f7ff;
+  background-color: #f9f9f9;
 }
