@@ -17,8 +17,9 @@ mongoose.connect(process.env.MONGO_URI, {
 .catch(err => console.error('MongoDB connection error:', err));
 
 app.use(express.json());
-app.use('/', routes);
 app.use('/api/bookings', bookingRoutes);
+app.use('/', routes);
+
 
 app.listen(port, () => {
   console.log(`Server running on http://localhost:${port}`);
