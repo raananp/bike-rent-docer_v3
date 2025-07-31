@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import './Booking.css';
 
 export default function Booking() {
   const [form, setForm] = useState({ name: '', date: '', duration: '' });
@@ -26,23 +27,21 @@ export default function Booking() {
   };
 
   return (
-    <div style={{ padding: '20px' }}>
+    <div className="booking-container">
       <h2>Create Booking</h2>
-      <form onSubmit={handleSubmit} style={{ marginBottom: '20px' }}>
+      <form onSubmit={handleSubmit} className="booking-form">
         <input
           type="text"
           placeholder="Name"
           value={form.name}
           onChange={(e) => setForm({ ...form, name: e.target.value })}
           required
-          style={{ marginRight: '10px' }}
         />
         <input
           type="date"
           value={form.date}
           onChange={(e) => setForm({ ...form, date: e.target.value })}
           required
-          style={{ marginRight: '10px' }}
         />
         <input
           type="number"
@@ -51,13 +50,12 @@ export default function Booking() {
           onChange={(e) => setForm({ ...form, duration: e.target.value })}
           required
           min={1}
-          style={{ marginRight: '10px' }}
         />
         <button type="submit">Book</button>
       </form>
 
       <h3>All Bookings</h3>
-      <table border="1" cellPadding="10" cellSpacing="0" width="100%">
+      <table className="booking-table">
         <thead>
           <tr>
             <th>Name</th>
@@ -69,7 +67,7 @@ export default function Booking() {
           {bookings.map((b) => (
             <tr key={b._id}>
               <td>{b.name}</td>
-              <td>{b.date}</td>
+              <td>{new Date(b.date).toLocaleDateString()}</td>
               <td>{b.duration}</td>
             </tr>
           ))}
