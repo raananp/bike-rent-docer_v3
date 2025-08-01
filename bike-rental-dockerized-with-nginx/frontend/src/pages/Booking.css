@@ -1,9 +1,11 @@
-/* Main container spacing */
+/* Full page container */
 .booking-container {
-  padding: 100px 20px 40px 20px; /* top padding accounts for fixed navbar */
-  max-width: 900px;
-  margin: 0 auto;
+  background-color: #121212; /* Dark theme background */
+  color: #ffffff;            /* White readable text */
+  padding: 100px 20px 40px 20px;
+  max-width: 100%;
   font-family: Arial, sans-serif;
+  min-height: 100vh;
 }
 
 /* Form layout */
@@ -12,24 +14,26 @@
   flex-wrap: wrap;
   gap: 15px;
   margin-bottom: 40px;
-  background-color: #f9f9f9;
+  background-color: #1e1e1e;
   padding: 20px;
   border-radius: 8px;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.4);
 }
 
-/* Input and select styling */
+/* Input and select fields */
 .booking-form input[type="text"],
 .booking-form input[type="date"],
 .booking-form input[type="number"],
 .booking-form select {
   flex: 1 1 250px;
   padding: 10px;
-  border: 1px solid #ccc;
+  border: 1px solid #555;
+  background-color: #2a2a2a;
+  color: white;
   border-radius: 6px;
 }
 
-/* Checkbox label style */
+/* Checkbox line */
 .booking-form .checkbox {
   display: flex;
   align-items: center;
@@ -38,11 +42,12 @@
   font-size: 0.95rem;
 }
 
-/* File uploads section */
+/* File upload styling */
 .file-uploads {
   display: flex;
   gap: 20px;
   flex: 1 1 100%;
+  color: white;
 }
 
 .file-uploads label {
@@ -67,25 +72,27 @@
   background-color: #0056b3;
 }
 
-/* Table styles */
+/* Booking table styling */
 .booking-table {
   width: 100%;
   border-collapse: collapse;
   margin-top: 20px;
+  color: white;
+  background-color: transparent;
 }
 
 .booking-table th,
 .booking-table td {
   padding: 12px 10px;
-  border: 1px solid #ddd;
+  border: 1px solid #444;
   text-align: left;
 }
 
 .booking-table th {
-  background-color: #f0f0f0;
+  background-color: #222;
   font-weight: bold;
 }
 
 .booking-table tr:nth-child(even) {
-  background-color: #f9f9f9;
+  background-color: #1a1a1a;
 }
