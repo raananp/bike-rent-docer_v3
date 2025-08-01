@@ -28,7 +28,7 @@ export default function Booking() {
   const calculateEndDate = (start, days) => {
     const startDate = new Date(start);
     startDate.setDate(startDate.getDate() + parseInt(days));
-    return startDate.toISOString().slice(0, 16); // yyyy-MM-ddTHH:mm
+    return startDate.toISOString(); // keep full ISO to format later
   };
 
   const handleSubmit = async (e) => {
@@ -60,6 +60,18 @@ export default function Booking() {
       passportUploaded: false,
     });
     fetchBookings();
+  };
+
+  const formatDateTime = (isoString) => {
+    if (!isoString) return '';
+    const date = new Date(isoString);
+    return date.toLocaleString('en-GB', {
+      year: 'numeric',
+      month: 'short',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
   };
 
   return (
@@ -145,8 +157,8 @@ export default function Booking() {
           {bookings.map((b) => (
             <div key={b._id} className="booking-card">
               <p><strong>Name:</strong> {b.firstName} {b.lastName}</p>
-              <p><strong>Start Date:</strong> {b.startDateTime}</p>
-              <p><strong>End Date:</strong> {b.endDateTime}</p>
+              <p><strong>Start Date:</strong> {formatDateTime(b.startDateTime)}</p>
+              <p><strong>End Date:</strong> {formatDateTime(b.endDateTime)}</p>
               <p><strong>Days:</strong> {b.numberOfDays}</p>
               <p><strong>Bike:</strong> {b.bike}</p>
               <p><strong>Insurance:</strong> {b.insurance ? 'Yes' : 'No'}</p>
