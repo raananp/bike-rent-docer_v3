@@ -2,12 +2,12 @@ import React, { useRef } from 'react';
 import { Box, Typography } from '@mui/material';
 import { motion, useScroll, useTransform } from 'framer-motion';
 
-// Reusable section with text + image + scroll animation
-const ScrollSection = ({ title, subtitle, image, reverse }) => {
+// Reusable section with title, multiple subtitle lines, and image
+const ScrollSection = ({ title, subtitles, image, reverse }) => {
   const textRef = useRef(null);
   const { scrollYProgress } = useScroll({
     target: textRef,
-    offset: ["start end", "end start"]
+    offset: ["start end", "end start"],
   });
 
   const opacity = useTransform(scrollYProgress, [0, 0.3, 0.7, 1], [0, 1, 1, 0]);
@@ -15,9 +15,7 @@ const ScrollSection = ({ title, subtitle, image, reverse }) => {
 
   const containerVariants = {
     visible: {
-      transition: {
-        staggerChildren: 0.3,
-      },
+      transition: { staggerChildren: 0.3 },
     },
   };
 
@@ -34,18 +32,21 @@ const ScrollSection = ({ title, subtitle, image, reverse }) => {
     <Box
       ref={textRef}
       sx={{
+        width: '100%',
+        maxWidth: '1400px',
+        mx: 'auto',
         minHeight: '100vh',
         display: 'flex',
         flexDirection: reverse ? { xs: 'column', md: 'row-reverse' } : { xs: 'column', md: 'row' },
         alignItems: 'center',
-        justifyContent: 'center',
-        px: { xs: 2, md: 6 },
+        justifyContent: 'space-between',
+        px: { xs: 2, sm: 4, md: 6 },
         py: 10,
-        gap: 6,
+        gap: { xs: 4, md: 8 },
         overflow: 'hidden',
       }}
     >
-      {/* Text Section */}
+      {/* Text */}
       <motion.div
         style={{ flex: 1, opacity, y }}
         variants={containerVariants}
@@ -58,14 +59,17 @@ const ScrollSection = ({ title, subtitle, image, reverse }) => {
             {title}
           </Typography>
         </motion.div>
-        <motion.div variants={lineVariants}>
-          <Typography variant="h6" color="white">
-            {subtitle}
-          </Typography>
-        </motion.div>
+
+        {subtitles.map((line, index) => (
+          <motion.div key={index} variants={lineVariants}>
+            <Typography variant="h6" color="white">
+              {line}
+            </Typography>
+          </motion.div>
+        ))}
       </motion.div>
 
-      {/* Image Section */}
+      {/* Image */}
       <motion.img
         src={image}
         alt={title}
@@ -97,18 +101,30 @@ const Home = () => {
     >
       <ScrollSection
         title="Ride in Style"
-        subtitle="From sport to cruiser, we’ve got your dream ride."
+        subtitles={[
+          'From sport to cruiser,',
+          'we’ve got your dream ride.',
+          'Book with confidence.',
+        ]}
         image="/images/bike1.jpg"
       />
       <ScrollSection
         title="Book in Seconds"
-        subtitle="Fast online booking with instant confirmation."
+        subtitles={[
+          'Fast online booking',
+          'with instant confirmation',
+          'and real-time support.',
+        ]}
         image="/images/bike2.jpg"
         reverse
       />
       <ScrollSection
         title="Explore Thailand"
-        subtitle="Pickup and ride anywhere you want. Adventure starts here."
+        subtitles={[
+          'Pickup and ride anywhere you want.',
+          'Adventure starts here.',
+          'No limits, just freedom.',
+        ]}
         image="/images/bike3.jpg"
       />
     </Box>
