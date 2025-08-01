@@ -10,14 +10,24 @@ const Navbar = () => {
       position="fixed"
       elevation={0}
       sx={{
-        backgroundColor: '#000',
-        backdropFilter: 'blur(10px)',
+        backgroundColor: 'transparent',
+        boxShadow: 'none',
         px: 4,
         py: 1,
       }}
     >
       <Toolbar sx={{ justifyContent: 'space-between' }}>
-        <Typography variant="h6" component={Link} to="/" sx={{ color: '#fff', textDecoration: 'none' }}>
+        <Typography
+          variant="h6"
+          component={Link}
+          to="/"
+          sx={{
+            color: '#fff',
+            textDecoration: 'none',
+            fontWeight: 600,
+            letterSpacing: 1,
+          }}
+        >
           Pattaya Bike Rental
         </Typography>
         <Box>
@@ -29,6 +39,8 @@ const Navbar = () => {
               sx={{
                 color: '#fff',
                 mx: 1,
+                fontWeight: 500,
+                textTransform: 'uppercase',
                 transition: 'all 0.3s ease',
                 '&:hover': {
                   transform: 'translateY(-2px)',
