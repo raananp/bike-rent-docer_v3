@@ -18,9 +18,20 @@
   gap: 20px;
 }
 
+/* Side-by-side first and last name inputs */
+.name-fields {
+  display: flex;
+  gap: 20px;
+}
+
+.name-fields input {
+  flex: 1;
+}
+
 /* Inputs with underline only */
 .booking-form input[type="text"],
 .booking-form input[type="date"],
+.booking-form input[type="datetime-local"],
 .booking-form input[type="number"],
 .booking-form select {
   background: transparent;
@@ -38,7 +49,8 @@
 }
 
 /* Date picker fix */
-.booking-form input[type="date"]::-webkit-calendar-picker-indicator {
+.booking-form input[type="date"]::-webkit-calendar-picker-indicator,
+.booking-form input[type="datetime-local"]::-webkit-calendar-picker-indicator {
   filter: invert(1);
 }
 
