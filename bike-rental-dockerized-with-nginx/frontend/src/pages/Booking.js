@@ -3,14 +3,16 @@ import './Booking.css';
 
 export default function Booking() {
   const [form, setForm] = useState({
-    name: '',
-    date: '',
-    duration: '',
+    firstName: '',
+    lastName: '',
+    startDateTime: '',
+    numberOfDays: '',
     bike: '',
     insurance: false,
     licenseUploaded: false,
     passportUploaded: false,
   });
+
   const [bookings, setBookings] = useState([]);
 
   useEffect(() => {
@@ -23,11 +25,20 @@ export default function Booking() {
     setBookings(data);
   };
 
+  const calculateEndDate = (start, days) => {
+    const startDate = new Date(start);
+    startDate.setDate(startDate.getDate() + parseInt(days));
+    return startDate.toISOString().slice(0, 16); // yyyy-MM-ddTHH:mm
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
 
+    const endDateTime = calculateEndDate(form.startDateTime, form.numberOfDays);
+
     const newBooking = {
       ...form,
+      endDateTime,
       licenseUploaded: true,
       passportUploaded: true,
     };
@@ -39,9 +50,10 @@ export default function Booking() {
     });
 
     setForm({
-      name: '',
-      date: '',
-      duration: '',
+      firstName: '',
+      lastName: '',
+      startDateTime: '',
+      numberOfDays: '',
       bike: '',
       insurance: false,
       licenseUploaded: false,
@@ -57,22 +69,29 @@ export default function Booking() {
         <form onSubmit={handleSubmit} className="booking-form">
           <input
             type="text"
-            placeholder="Name"
-            value={form.name}
-            onChange={(e) => setForm({ ...form, name: e.target.value })}
+            placeholder="First Name"
+            value={form.firstName}
+            onChange={(e) => setForm({ ...form, firstName: e.target.value })}
             required
           />
           <input
-            type="date"
-            value={form.date}
-            onChange={(e) => setForm({ ...form, date: e.target.value })}
+            type="text"
+            placeholder="Last Name"
+            value={form.lastName}
+            onChange={(e) => setForm({ ...form, lastName: e.target.value })}
+            required
+          />
+          <input
+            type="datetime-local"
+            value={form.startDateTime}
+            onChange={(e) => setForm({ ...form, startDateTime: e.target.value })}
             required
           />
           <input
             type="number"
-            placeholder="Duration (hours)"
-            value={form.duration}
-            onChange={(e) => setForm({ ...form, duration: e.target.value })}
+            placeholder="Number of Days"
+            value={form.numberOfDays}
+            onChange={(e) => setForm({ ...form, numberOfDays: e.target.value })}
             required
             min={1}
           />
@@ -125,9 +144,10 @@ export default function Booking() {
         <div className="cards-wrapper">
           {bookings.map((b) => (
             <div key={b._id} className="booking-card">
-              <p><strong>Name:</strong> {b.name}</p>
-              <p><strong>Date:</strong> {b.date}</p>
-              <p><strong>Duration:</strong> {b.duration} hrs</p>
+              <p><strong>Name:</strong> {b.firstName} {b.lastName}</p>
+              <p><strong>Start Date:</strong> {b.startDateTime}</p>
+              <p><strong>End Date:</strong> {b.endDateTime}</p>
+              <p><strong>Days:</strong> {b.numberOfDays}</p>
               <p><strong>Bike:</strong> {b.bike}</p>
               <p><strong>Insurance:</strong> {b.insurance ? 'Yes' : 'No'}</p>
               <p><strong>License:</strong> {b.licenseUploaded ? 'Yes' : 'No'}</p>
