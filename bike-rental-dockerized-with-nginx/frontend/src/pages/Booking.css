@@ -1,19 +1,35 @@
-/* Full Booking Page */
+/* Main container: side-by-side layout */
 .booking-container {
-  background-color: #121212;
-  color: #ffffff;
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: 40px;
+  justify-content: center;
+  align-items: flex-start;
   padding: 100px 20px 40px;
-  max-width: 600px;
-  margin: 0 auto;
-  font-family: 'Arial', sans-serif;
   min-height: 100vh;
+  background-color: #121212;
+  color: white;
+  font-family: 'Arial', sans-serif;
 }
 
-/* Section headings */
-.booking-container h2,
-.booking-container h3 {
-  color: #fff;
+/* Booking form section */
+.booking-form-section {
+  flex: 1 1 400px;
+  max-width: 500px;
+}
+
+/* Booking table section */
+.booking-table-section {
+  flex: 1 1 500px;
+  max-width: 600px;
+}
+
+/* Headings */
+.booking-form-section h2,
+.booking-table-section h3 {
   margin-bottom: 20px;
+  color: #fff;
 }
 
 /* Vertical form layout */
@@ -21,10 +37,10 @@
   display: flex;
   flex-direction: column;
   gap: 24px;
-  margin-bottom: 50px;
+  margin-bottom: 20px;
 }
 
-/* Modern underline input style */
+/* Underline-only input styles */
 .booking-form input[type="text"],
 .booking-form input[type="date"],
 .booking-form input[type="number"],
@@ -44,13 +60,13 @@
   border-bottom-color: #007bff;
 }
 
-/* Select dropdown style */
+/* Dropdown */
 .booking-form select {
   appearance: none;
   background-color: transparent;
 }
 
-/* Checkbox section */
+/* Checkbox */
 .booking-form .checkbox {
   display: flex;
   align-items: center;
@@ -59,22 +75,17 @@
   color: #ccc;
 }
 
-/* File uploads styling */
+/* File upload labels */
 .file-uploads {
   display: flex;
   flex-direction: column;
   gap: 15px;
   font-size: 0.95rem;
-}
-
-.file-uploads label {
-  display: flex;
-  flex-direction: column;
   color: #ccc;
 }
 
 .file-uploads input[type="file"] {
-  margin-top: 6px;
+  margin-top: 5px;
   color: white;
 }
 
@@ -94,7 +105,7 @@
   background-color: #0056b3;
 }
 
-/* Booking table */
+/* Booking table styles */
 .booking-table {
   width: 100%;
   border-collapse: collapse;
@@ -111,8 +122,22 @@
 
 .booking-table th {
   background-color: #222;
+  font-weight: bold;
 }
 
 .booking-table tr:nth-child(even) {
   background-color: #1a1a1a;
+}
+
+/* Responsive: Stack on small screens */
+@media (max-width: 900px) {
+  .booking-container {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .booking-form-section,
+  .booking-table-section {
+    max-width: 100%;
+  }
 }
