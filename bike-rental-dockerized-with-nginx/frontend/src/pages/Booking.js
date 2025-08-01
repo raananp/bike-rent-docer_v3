@@ -11,7 +11,6 @@ export default function Booking() {
     licenseUploaded: false,
     passportUploaded: false,
   });
-
   const [bookings, setBookings] = useState([]);
 
   useEffect(() => {
@@ -48,87 +47,94 @@ export default function Booking() {
       licenseUploaded: false,
       passportUploaded: false,
     });
-
     fetchBookings();
   };
 
   return (
-    <div className="booking-container">
-      <form onSubmit={handleSubmit} className="booking-form">
+    <div className="booking-page">
+      <div className="booking-form-container">
         <h2>Create Booking</h2>
-        <input
-          type="text"
-          placeholder="Full Name"
-          value={form.name}
-          onChange={(e) => setForm({ ...form, name: e.target.value })}
-          required
-        />
-        <input
-          type="date"
-          value={form.date}
-          onChange={(e) => setForm({ ...form, date: e.target.value })}
-          required
-        />
-        <input
-          type="number"
-          placeholder="Duration (hours)"
-          value={form.duration}
-          onChange={(e) => setForm({ ...form, duration: e.target.value })}
-          required
-          min={1}
-        />
-        <select
-          value={form.bike}
-          onChange={(e) => setForm({ ...form, bike: e.target.value })}
-          required
-        >
-          <option value="">Select Bike</option>
-          <option value="Honda CBF 650cc">Honda CBF 650cc</option>
-          <option value="Yamaha NMax 155">Yamaha NMax 155</option>
-          <option value="Honda PCX 160">Honda PCX 160</option>
-          <option value="Yamaha Aerox 155">Yamaha Aerox 155</option>
-        </select>
-        <label className="checkbox">
+        <form onSubmit={handleSubmit} className="booking-form">
           <input
-            type="checkbox"
-            checked={form.insurance}
-            onChange={(e) => setForm({ ...form, insurance: e.target.checked })}
+            type="text"
+            placeholder="Name"
+            value={form.name}
+            onChange={(e) => setForm({ ...form, name: e.target.value })}
+            required
           />
-          Upgrade Insurance
-        </label>
-        <div className="file-uploads">
-          <label>
-            Upload Driver's License
+          <input
+            type="date"
+            value={form.date}
+            onChange={(e) => setForm({ ...form, date: e.target.value })}
+            required
+          />
+          <input
+            type="number"
+            placeholder="Duration (hours)"
+            value={form.duration}
+            onChange={(e) => setForm({ ...form, duration: e.target.value })}
+            required
+            min={1}
+          />
+          <select
+            value={form.bike}
+            onChange={(e) => setForm({ ...form, bike: e.target.value })}
+            required
+          >
+            <option value="">Select Bike</option>
+            <option value="Honda CBF 650cc">Honda CBF 650cc</option>
+            <option value="Yamaha NMax 155">Yamaha NMax 155</option>
+            <option value="Honda PCX 160">Honda PCX 160</option>
+            <option value="Yamaha Aerox 155">Yamaha Aerox 155</option>
+          </select>
+
+          <label className="checkbox">
             <input
-              type="file"
-              onChange={() => setForm({ ...form, licenseUploaded: true })}
-              required
+              type="checkbox"
+              checked={form.insurance}
+              onChange={(e) => setForm({ ...form, insurance: e.target.checked })}
             />
+            Upgrade Insurance
           </label>
-          <label>
-            Upload Passport
-            <input
-              type="file"
-              onChange={() => setForm({ ...form, passportUploaded: true })}
-              required
-            />
-          </label>
-        </div>
-        <button type="submit">Book</button>
-      </form>
+
+          <div className="file-uploads">
+            <label>
+              Upload License
+              <input
+                type="file"
+                onChange={() => setForm({ ...form, licenseUploaded: true })}
+                required
+              />
+            </label>
+            <label>
+              Upload Passport
+              <input
+                type="file"
+                onChange={() => setForm({ ...form, passportUploaded: true })}
+                required
+              />
+            </label>
+          </div>
+
+          <button type="submit">Book</button>
+        </form>
+      </div>
 
       <div className="booking-cards-container">
-        {bookings.map((b) => (
-          <div key={b._id} className="booking-card">
-            <h4>{b.name}</h4>
-            <p><strong>Date:</strong> {b.date}</p>
-            <p><strong>Duration:</strong> {b.duration} hours</p>
-            <p><strong>Bike:</strong> {b.bike}</p>
-            <p><strong>Insurance:</strong> {b.insurance ? 'Yes' : 'No'}</p>
-            <p><strong>License:</strong> {b.licenseUploaded ? 'Yes' : 'No'}</p>
-            <p><strong>Passport:</strong> {b.passportUploaded ? 'Yes' : 'No'}</p>
-          </div>
-        ))}
+        <h3>All Bookings</h3>
+        <div className="cards-wrapper">
+          {bookings.map((b) => (
+            <div key={b._id} className="booking-card">
+              <p><strong>Name:</strong> {b.name}</p>
+              <p><strong>Date:</strong> {b.date}</p>
+              <p><strong>Duration:</strong> {b.duration} hrs</p>
+              <p><strong>Bike:</strong> {b.bike}</p>
+              <p><strong>Insurance:</strong> {b.insurance ? 'Yes' : 'No'}</p>
+              <p><strong>License:</strong> {b.licenseUploaded ? 'Yes' : 'No'}</p>
+              <p><strong>Passport:</strong> {b.passportUploaded ? 'Yes' : 'No'}</p>
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   );
