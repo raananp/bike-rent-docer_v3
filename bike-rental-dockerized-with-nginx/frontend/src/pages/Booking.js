@@ -1,3 +1,4 @@
+// Booking.js
 import React, { useState, useEffect } from 'react';
 import './Booking.css';
 
@@ -28,7 +29,7 @@ export default function Booking() {
   const calculateEndDate = (start, days) => {
     const startDate = new Date(start);
     startDate.setDate(startDate.getDate() + parseInt(days));
-    return startDate.toISOString(); // keep full ISO to format later
+    return startDate.toISOString();
   };
 
   const handleSubmit = async (e) => {
@@ -79,20 +80,22 @@ export default function Booking() {
       <div className="booking-form-container">
         <h2>Create Booking</h2>
         <form onSubmit={handleSubmit} className="booking-form">
-          <input
-            type="text"
-            placeholder="First Name"
-            value={form.firstName}
-            onChange={(e) => setForm({ ...form, firstName: e.target.value })}
-            required
-          />
-          <input
-            type="text"
-            placeholder="Last Name"
-            value={form.lastName}
-            onChange={(e) => setForm({ ...form, lastName: e.target.value })}
-            required
-          />
+          <div className="name-fields">
+            <input
+              type="text"
+              placeholder="First Name"
+              value={form.firstName}
+              onChange={(e) => setForm({ ...form, firstName: e.target.value })}
+              required
+            />
+            <input
+              type="text"
+              placeholder="Last Name"
+              value={form.lastName}
+              onChange={(e) => setForm({ ...form, lastName: e.target.value })}
+              required
+            />
+          </div>
           <input
             type="datetime-local"
             value={form.startDateTime}
