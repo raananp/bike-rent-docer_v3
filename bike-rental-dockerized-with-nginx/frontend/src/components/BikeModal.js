@@ -32,6 +32,11 @@ const modalStyle = {
 const BikeModal = ({ bike, onClose }) => {
   const navigate = useNavigate();
 
+  const handleBookClick = () => {
+    const encodedBike = encodeURIComponent(bike.title);
+    navigate(`/booking?bike=${encodedBike}`);
+  };
+
   return (
     <AnimatePresence>
       {bike && (
@@ -83,7 +88,7 @@ const BikeModal = ({ bike, onClose }) => {
             <Button
               variant="contained"
               sx={{ mt: 3 }}
-              onClick={() => navigate('/booking')}
+              onClick={handleBookClick}
             >
               Book
             </Button>
