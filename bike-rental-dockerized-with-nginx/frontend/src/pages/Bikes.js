@@ -6,7 +6,7 @@ import BikeModal from '../components/BikeModal';
 
 const dummyBikes = [
   {
-    image: 'https://via.placeholder.com/400x240?text=Honda+650F',
+    image: '/images/bike2',
     title: 'Honda 650F',
     description: 'Comfortable sport touring bike, perfect for exploring Pattaya with ease.',
     year: 2021,
@@ -16,7 +16,7 @@ const dummyBikes = [
     pricePerMonth: 8000,
   },
   {
-    image: 'https://via.placeholder.com/400x240?text=Yamaha+MT-07',
+    image: '/images/bike_h1.jpg',
     title: 'Yamaha MT-07',
     description: 'Agile and powerful naked bike with excellent torque and balance.',
     year: 2022,
@@ -26,7 +26,7 @@ const dummyBikes = [
     pricePerMonth: 8500,
   },
   {
-    image: 'https://via.placeholder.com/400x240?text=Kawasaki+Z900',
+    image: '/images/bike2',
     title: 'Kawasaki Z900',
     description: 'High-performance street fighter with bold styling and smooth ride.',
     year: 2023,
