@@ -26,7 +26,7 @@ const dummyBikes = [
     pricePerMonth: 10500,
   },
   {
-    image: '/images/bike3.jpg',
+    image: '/images/bike_h2.jpg',
     title: 'Harley Davidson Fat Boy 1990',
     description: 'Classic heritage with deep rumble and head-turning looks.',
     year: 1990,
