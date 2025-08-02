@@ -6,7 +6,7 @@ import BikeModal from '../components/BikeModal';
 
 const dummyBikes = [
   {
-    image: '/images/bike_cb650r.jpg',
+    image: '/images/bike3.jpg',
     title: 'Honda CB650R E-Clutch',
     description: 'Sleek and stylish neo-sports café design with a revolutionary E-Clutch system for smooth riding in Pattaya.',
     year: 2023,
@@ -16,7 +16,7 @@ const dummyBikes = [
     pricePerMonth: 9800,
   },
   {
-    image: '/images/bike_fatboy1.jpg',
+    image: '/images/bike_h3.jpg',
     title: 'Harley-Davidson Fat Boy',
     description: 'Iconic American cruiser with bold looks and a powerful Milwaukee-Eight 114 engine for those who love to cruise in style.',
     year: 2022,
@@ -26,7 +26,7 @@ const dummyBikes = [
     pricePerMonth: 12500,
   },
   {
-    image: '/images/bike_fatboy2.jpg',
+    image: '/images/bike_h2.jpg',
     title: 'Harley-Davidson Fat Boy',
     description: 'Legendary heavyweight motorcycle delivering a muscular ride with modern comfort and premium finishes.',
     year: 2023,
