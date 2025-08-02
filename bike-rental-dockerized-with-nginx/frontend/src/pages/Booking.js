@@ -1,27 +1,20 @@
 import React, { useState, useEffect } from 'react';
 import './Booking.css';
-import { useLocation } from 'react-router-dom';
 
 export default function Booking() {
-  const location = useLocation();
-
-  const getQueryBike = () => {
-    const params = new URLSearchParams(location.search);
-    return params.get('bike') || '';
-  };
-
   const [form, setForm] = useState({
     firstName: '',
     lastName: '',
     startDateTime: '',
     numberOfDays: '',
-    bike: getQueryBike(),
+    bike: '',
     insurance: false,
-    licenseUploaded: false,
-    passportUploaded: false,
   });
 
+  const [licenseFile, setLicenseFile] = useState(null);
+  const [passportFile, setPassportFile] = useState(null);
   const [bookings, setBookings] = useState([]);
+  const [statusMessage, setStatusMessage] = useState('');
 
   useEffect(() => {
     fetchBookings();
@@ -42,32 +35,43 @@ export default function Booking() {
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    const endDateTime = calculateEndDate(form.startDateTime, form.numberOfDays);
+    const formData = new FormData();
+    for (const key in form) {
+      formData.append(key, form[key]);
+    }
 
-    const newBooking = {
-      ...form,
-      endDateTime,
-      licenseUploaded: true,
-      passportUploaded: true,
-    };
+    // ✅ Fix: Field names must match backend multer config
+    if (licenseFile) formData.append('licenseFile', licenseFile);
+    if (passportFile) formData.append('passportFile', passportFile);
 
-    await fetch('/api/bookings', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(newBooking),
-    });
+    try {
+      const res = await fetch('/api/bookings', {
+        method: 'POST',
+        body: formData,
+      });
 
-    setForm({
-      firstName: '',
-      lastName: '',
-      startDateTime: '',
-      numberOfDays: '',
-      bike: '',
-      insurance: false,
-      licenseUploaded: false,
-      passportUploaded: false,
-    });
-    fetchBookings();
+      const result = await res.json();
+
+      if (res.ok) {
+        setStatusMessage('✅ Booking created successfully!');
+        fetchBookings();
+        setForm({
+          firstName: '',
+          lastName: '',
+          startDateTime: '',
+          numberOfDays: '',
+          bike: '',
+          insurance: false,
+        });
+        setLicenseFile(null);
+        setPassportFile(null);
+      } else {
+        setStatusMessage(`❌ Error: ${result.error}`);
+      }
+    } catch (err) {
+      console.error(err);
+      setStatusMessage('❌ Error submitting form.');
+    }
   };
 
   const formatDateTime = (isoString) => {
@@ -86,6 +90,8 @@ export default function Booking() {
     <div className="booking-page">
       <div className="booking-form-container">
         <h2>Create Booking</h2>
+        {statusMessage && <p className="status-message">{statusMessage}</p>}
+
         <form onSubmit={handleSubmit} className="booking-form">
           <div className="name-fields">
             <input
@@ -103,12 +109,14 @@ export default function Booking() {
               required
             />
           </div>
+
           <input
             type="datetime-local"
             value={form.startDateTime}
             onChange={(e) => setForm({ ...form, startDateTime: e.target.value })}
             required
           />
+
           <input
             type="number"
             placeholder="Number of Days"
@@ -117,6 +125,7 @@ export default function Booking() {
             required
             min={1}
           />
+
           <select
             value={form.bike}
             onChange={(e) => setForm({ ...form, bike: e.target.value })}
@@ -142,7 +151,8 @@ export default function Booking() {
               Upload License
               <input
                 type="file"
-                onChange={() => setForm({ ...form, licenseUploaded: true })}
+                name="licenseFile"
+                onChange={(e) => setLicenseFile(e.target.files[0])}
                 required
               />
             </label>
@@ -150,7 +160,8 @@ export default function Booking() {
               Upload Passport
               <input
                 type="file"
-                onChange={() => setForm({ ...form, passportUploaded: true })}
+                name="passportFile"
+                onChange={(e) => setPassportFile(e.target.files[0])}
                 required
               />
             </label>
@@ -171,8 +182,8 @@ export default function Booking() {
               <p><strong>Days:</strong> {b.numberOfDays}</p>
               <p><strong>Bike:</strong> {b.bike}</p>
               <p><strong>Insurance:</strong> {b.insurance ? 'Yes' : 'No'}</p>
-              <p><strong>License:</strong> {b.licenseUploaded ? 'Yes' : 'No'}</p>
-              <p><strong>Passport:</strong> {b.passportUploaded ? 'Yes' : 'No'}</p>
+              <p><strong>License:</strong> ✅</p>
+              <p><strong>Passport:</strong> ✅</p>
             </div>
           ))}
         </div>
