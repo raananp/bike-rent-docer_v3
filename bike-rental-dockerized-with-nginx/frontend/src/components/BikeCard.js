@@ -18,6 +18,7 @@ function BikeCard({ image, title, description }) {
         '&:hover': {
           transform: 'scale(1.03)',
         },
+        cursor: 'pointer',
       }}
     >
       <CardMedia
