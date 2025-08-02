@@ -1,14 +1,21 @@
-// Booking.js
 import React, { useState, useEffect } from 'react';
 import './Booking.css';
+import { useLocation } from 'react-router-dom';
 
 export default function Booking() {
+  const location = useLocation();
+
+  const getQueryBike = () => {
+    const params = new URLSearchParams(location.search);
+    return params.get('bike') || '';
+  };
+
   const [form, setForm] = useState({
     firstName: '',
     lastName: '',
     startDateTime: '',
     numberOfDays: '',
-    bike: '',
+    bike: getQueryBike(),
     insurance: false,
     licenseUploaded: false,
     passportUploaded: false,
@@ -116,10 +123,9 @@ export default function Booking() {
             required
           >
             <option value="">Select Bike</option>
-            <option value="Honda CBF 650cc">Honda CBF 650cc</option>
-            <option value="Yamaha NMax 155">Yamaha NMax 155</option>
-            <option value="Honda PCX 160">Honda PCX 160</option>
-            <option value="Yamaha Aerox 155">Yamaha Aerox 155</option>
+            <option value="Honda CB650R E-Clutch">Honda CB650R E-Clutch</option>
+            <option value="Harley Davidson Fat Boy 1">Harley Davidson Fat Boy 1</option>
+            <option value="Harley Davidson Fat Boy 2">Harley Davidson Fat Boy 2</option>
           </select>
 
           <label className="checkbox">
