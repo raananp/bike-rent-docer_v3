@@ -1,5 +1,5 @@
 import React from 'react';
-import { Box, Typography } from '@mui/material';
+import { Box, Typography, Grid } from '@mui/material';
 import { motion } from 'framer-motion';
 
 const ScrollSection = ({ title, subtitles, image, reverse }) => {
@@ -36,7 +36,6 @@ const ScrollSection = ({ title, subtitles, image, reverse }) => {
         backgroundColor: '#121212',
       }}
     >
-      {/* Text */}
       <motion.div
         style={{ flex: 1, color: '#fff' }}
         variants={containerVariants}
@@ -52,14 +51,11 @@ const ScrollSection = ({ title, subtitles, image, reverse }) => {
 
         {subtitles.map((line, idx) => (
           <motion.div key={idx} variants={lineVariants}>
-            <Typography variant="h6">
-              {line}
-            </Typography>
+            <Typography variant="h6">{line}</Typography>
           </motion.div>
         ))}
       </motion.div>
 
-      {/* Image */}
       <motion.img
         src={image}
         alt={title}
@@ -79,44 +75,58 @@ const ScrollSection = ({ title, subtitles, image, reverse }) => {
   );
 };
 
+const Footer = () => (
+  <Box
+    sx={{
+      padding: '40px 20px',
+      borderTop: '1px solid #444',
+      color: '#fff',
+    }}
+  >
+    <Grid container spacing={4} alignItems="flex-start">
+      <Grid item xs={12} md={6}>
+        <Typography variant="h6" gutterBottom>
+          Contact Us
+        </Typography>
+        <Typography>Email: info@bikerentthailand.com</Typography>
+        <Typography>Phone: +66 91 234 5678</Typography>
+        <Typography>Location: Pattaya, Thailand</Typography>
+      </Grid>
+      <Grid item xs={12} md={6}>
+        <iframe
+          title="Google Maps Pattaya"
+          src="https://maps.google.com/maps?q=pattaya&t=&z=13&ie=UTF8&iwloc=&output=embed"
+          width="100%"
+          height="250"
+          style={{ border: 0 }}
+          allowFullScreen=""
+          loading="lazy"
+        ></iframe>
+      </Grid>
+    </Grid>
+  </Box>
+);
+
 const Home = () => {
   return (
-    <Box
-      sx={{
-        backgroundColor: '#121212',
-        overflowX: 'hidden',
-        m: 0,
-        p: 0,
-      }}
-    >
+    <Box sx={{ backgroundColor: '#121212', overflowX: 'hidden', m: 0, p: 0 }}>
       <ScrollSection
         title="Ride in Style"
-        subtitles={[
-          'From sport to cruiser,',
-          'we’ve got your dream ride.',
-          'Book with confidence.',
-        ]}
-        image="/images/bike1.jpg"
+        subtitles={['From sport to cruiser,', 'we’ve got your dream ride.', 'Book with confidence.']}
+        image="/images/bike_h2.jpg"
       />
       <ScrollSection
         title="Book in Seconds"
-        subtitles={[
-          'Fast online booking',
-          'with instant confirmation',
-          'and real-time support.',
-        ]}
-        image="/images/bike2.jpg"
+        subtitles={['Fast online booking', 'with instant confirmation', 'and real-time support.']}
+        image="/images/bike_h1.jpg"
         reverse
       />
       <ScrollSection
         title="Explore Thailand"
-        subtitles={[
-          'Pickup and ride anywhere you want.',
-          'Adventure starts here.',
-          'No limits, just freedom.',
-        ]}
+        subtitles={['Pickup and ride anywhere you want.', 'Adventure starts here.', 'No limits, just freedom.']}
         image="/images/bike3.jpg"
       />
+      <Footer />
     </Box>
   );
 };
