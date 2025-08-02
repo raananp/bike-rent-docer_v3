@@ -8,10 +8,8 @@ const bookingSchema = new mongoose.Schema({
   numberOfDays: String,
   bike: String,
   insurance: Boolean,
-  licenseUploaded: Boolean,
-  passportUploaded: Boolean,
-  licenseUrl: String,
-  passportUrl: String,
+  licenseFileUrl: String,   // ✅ match backend
+  passportFileUrl: String,  // ✅ match backend
 });
 
 module.exports = mongoose.model('Booking', bookingSchema);

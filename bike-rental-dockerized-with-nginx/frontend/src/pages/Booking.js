@@ -15,6 +15,7 @@ export default function Booking() {
   const [passportFile, setPassportFile] = useState(null);
   const [bookings, setBookings] = useState([]);
   const [statusMessage, setStatusMessage] = useState('');
+  const [showFiles, setShowFiles] = useState({});
 
   useEffect(() => {
     fetchBookings();
@@ -26,21 +27,14 @@ export default function Booking() {
     setBookings(data);
   };
 
-  const calculateEndDate = (start, days) => {
-    const startDate = new Date(start);
-    startDate.setDate(startDate.getDate() + parseInt(days));
-    return startDate.toISOString();
-  };
-
   const handleSubmit = async (e) => {
     e.preventDefault();
-
     const formData = new FormData();
+
     for (const key in form) {
       formData.append(key, form[key]);
     }
 
-    // ✅ Fix: Field names must match backend multer config
     if (licenseFile) formData.append('licenseFile', licenseFile);
     if (passportFile) formData.append('passportFile', passportFile);
 
@@ -51,7 +45,6 @@ export default function Booking() {
       });
 
       const result = await res.json();
-
       if (res.ok) {
         setStatusMessage('✅ Booking created successfully!');
         fetchBookings();
@@ -86,12 +79,17 @@ export default function Booking() {
     });
   };
 
+  const toggleViewFiles = async (id) => {
+    const updated = { ...showFiles };
+    updated[id] = !updated[id];
+    setShowFiles(updated);
+  };
+
   return (
     <div className="booking-page">
       <div className="booking-form-container">
         <h2>Create Booking</h2>
         {statusMessage && <p className="status-message">{statusMessage}</p>}
-
         <form onSubmit={handleSubmit} className="booking-form">
           <div className="name-fields">
             <input
@@ -109,14 +107,12 @@ export default function Booking() {
               required
             />
           </div>
-
           <input
             type="datetime-local"
             value={form.startDateTime}
             onChange={(e) => setForm({ ...form, startDateTime: e.target.value })}
             required
           />
-
           <input
             type="number"
             placeholder="Number of Days"
@@ -125,7 +121,6 @@ export default function Booking() {
             required
             min={1}
           />
-
           <select
             value={form.bike}
             onChange={(e) => setForm({ ...form, bike: e.target.value })}
@@ -136,7 +131,6 @@ export default function Booking() {
             <option value="Harley Davidson Fat Boy 2021">Harley Davidson Fat Boy 2021</option>
             <option value="Harley Davidson Fat Boy 1990">Harley Davidson Fat Boy 1990</option>
           </select>
-
           <label className="checkbox">
             <input
               type="checkbox"
@@ -145,28 +139,16 @@ export default function Booking() {
             />
             Upgrade Insurance
           </label>
-
           <div className="file-uploads">
             <label>
               Upload License
-              <input
-                type="file"
-                name="licenseFile"
-                onChange={(e) => setLicenseFile(e.target.files[0])}
-                required
-              />
+              <input type="file" onChange={(e) => setLicenseFile(e.target.files[0])} required />
             </label>
             <label>
               Upload Passport
-              <input
-                type="file"
-                name="passportFile"
-                onChange={(e) => setPassportFile(e.target.files[0])}
-                required
-              />
+              <input type="file" onChange={(e) => setPassportFile(e.target.files[0])} required />
             </label>
           </div>
-
           <button type="submit">Book</button>
         </form>
       </div>
@@ -182,8 +164,19 @@ export default function Booking() {
               <p><strong>Days:</strong> {b.numberOfDays}</p>
               <p><strong>Bike:</strong> {b.bike}</p>
               <p><strong>Insurance:</strong> {b.insurance ? 'Yes' : 'No'}</p>
-              <p><strong>License:</strong> ✅</p>
-              <p><strong>Passport:</strong> ✅</p>
+              <button onClick={() => toggleViewFiles(b._id)}>View Files</button>
+              {showFiles[b._id] && (
+                <div>
+                  <p><strong>License:</strong></p>
+                  {b.licenseSignedUrl ? (
+                    <img src={b.licenseSignedUrl} alt="License" width="200" />
+                  ) : <p>No license uploaded.</p>}
+                  <p><strong>Passport:</strong></p>
+                  {b.passportSignedUrl ? (
+                    <img src={b.passportSignedUrl} alt="Passport" width="200" />
+                  ) : <p>No passport uploaded.</p>}
+                </div>
+              )}
             </div>
           ))}
         </div>

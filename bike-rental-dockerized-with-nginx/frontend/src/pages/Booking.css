@@ -1,3 +1,10 @@
+.uploaded-files img.uploaded-image {
+  margin-top: 10px;
+  max-width: 100%;
+  border: 1px solid #ccc;
+  border-radius: 8px;
+}
+
 .booking-page {
   display: flex;
   flex-wrap: wrap;
