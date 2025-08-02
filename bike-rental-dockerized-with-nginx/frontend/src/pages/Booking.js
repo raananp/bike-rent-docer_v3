@@ -124,8 +124,8 @@ export default function Booking() {
           >
             <option value="">Select Bike</option>
             <option value="Honda CB650R E-Clutch">Honda CB650R E-Clutch</option>
-            <option value="Harley Davidson Fat Boy 1">Harley Davidson Fat Boy 1</option>
-            <option value="Harley Davidson Fat Boy 2">Harley Davidson Fat Boy 2</option>
+            <option value="Harley Davidson Fat Boy 2021">Harley Davidson Fat Boy 2021</option>
+            <option value="Harley Davidson Fat Boy 1990">Harley Davidson Fat Boy 1990</option>
           </select>
 
           <label className="checkbox">
