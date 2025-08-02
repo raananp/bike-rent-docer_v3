@@ -7,6 +7,8 @@ WORKDIR /app
 # Copy package.json and install dependencies
 COPY package*.json ./
 RUN npm install
+RUN npm install @mui/icons-material@5.11.0
+
 
 # Copy rest of the app
 COPY . .
