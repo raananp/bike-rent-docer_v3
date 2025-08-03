@@ -69,6 +69,32 @@ export default function Booking() {
     setBookings(data);
   };
 
+  const handleFileChange = (e, type) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+    const maxSizeMB = 10;
+
+    if (!allowedTypes.includes(file.type)) {
+      setStatusMessage(`❌ ${type === 'license' ? 'License' : 'Passport'} must be an image file (jpg, png, gif, webp).`);
+      return;
+    }
+
+    if (file.size > maxSizeMB * 1024 * 1024) {
+      setStatusMessage(`❌ ${type === 'license' ? 'License' : 'Passport'} must be smaller than ${maxSizeMB}MB.`);
+      return;
+    }
+
+    if (type === 'license') {
+      setLicenseFile(file);
+    } else {
+      setPassportFile(file);
+    }
+
+    setStatusMessage('');
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
 
@@ -166,13 +192,13 @@ export default function Booking() {
               <span>
                 Upload License{licenseFile && <span className="checkmark"> ✅</span>}
               </span>
-              <input type="file" style={{ display: 'none' }} onChange={(e) => setLicenseFile(e.target.files[0])} required={!form.provideDocsInOffice} />
+              <input type="file" accept="image/*" style={{ display: 'none' }} onChange={(e) => handleFileChange(e, 'license')} required={!form.provideDocsInOffice} />
             </label>
             <label className="upload-label">
               <span>
                 Upload Passport{passportFile && <span className="checkmark"> ✅</span>}
               </span>
-              <input type="file" style={{ display: 'none' }} onChange={(e) => setPassportFile(e.target.files[0])} required={!form.provideDocsInOffice} />
+              <input type="file" accept="image/*" style={{ display: 'none' }} onChange={(e) => handleFileChange(e, 'passport')} required={!form.provideDocsInOffice} />
             </label>
           </div>
 

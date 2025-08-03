@@ -5,7 +5,8 @@ const cors = require('cors');
 const path = require('path');
 
 const bookingsRoute = require('./routes/bookings');
-const adminRoutes = require('./routes/admin'); // ✅ Import admin routes
+const adminRoutes = require('./routes/admin');
+const bikeRoutes = require('./routes/bikeRoutes'); // ✅ Import bike routes
 
 const app = express();
 
@@ -14,7 +15,8 @@ app.use(express.json());
 
 // API routes
 app.use('/api/bookings', bookingsRoute);
-app.use('/api/admin', adminRoutes); // ✅ Mount admin route
+app.use('/api/admin', adminRoutes);
+app.use('/api/bikes', bikeRoutes); // ✅ Mount bike route
 
 // MongoDB connection
 mongoose.connect(process.env.MONGO_URI, {
