@@ -8,6 +8,7 @@ const Booking = require('../models/Booking');
 
 const router = express.Router();
 
+// AWS S3 setup
 const s3 = new S3Client({
   region: process.env.AWS_REGION,
   credentials: {
@@ -16,13 +17,61 @@ const s3 = new S3Client({
   },
 });
 
+// Multer setup
 const storage = multer.memoryStorage();
 const upload = multer({ storage }).fields([
   { name: 'licenseFile', maxCount: 1 },
   { name: 'passportFile', maxCount: 1 },
 ]);
 
-// 👇 Upload to S3 with clean filename convention
+// 🧮 Pricing logic
+const bikePricing = {
+  'Honda CB650R E-Clutch': {
+    perDay: 500,
+    perWeek: 3200,
+    perMonth: 9800,
+  },
+  'Harley Davidson Fat Boy 2021': {
+    perDay: 600,
+    perWeek: 3900,
+    perMonth: 10500,
+  },
+  'Harley Davidson Fat Boy 1990': {
+    perDay: 450,
+    perWeek: 3000,
+    perMonth: 9000,
+  },
+};
+
+const calculatePrice = (days, insurance, bike) => {
+  const pricing = bikePricing[bike];
+  if (!pricing) return 0;
+
+  let total = 0;
+  let remaining = days;
+
+  const months = Math.floor(remaining / 30);
+  total += months * pricing.perMonth;
+  remaining -= months * 30;
+
+  const weeks = Math.floor(remaining / 7);
+  total += weeks * pricing.perWeek;
+  remaining -= weeks * 7;
+
+  total += remaining * pricing.perDay;
+
+  // 🟡 Add base surcharge: 50 THB per day
+  total += days * 50;
+
+  // ✅ Insurance surcharge
+  if (insurance === 'true' || insurance === true) {
+    total += days * 50;
+  }
+
+  return total;
+};
+
+// Upload to S3 with clean filename convention
 const uploadToS3 = async (file, firstName, lastName, type) => {
   const extension = mime.extension(file.mimetype);
   const key = `${firstName}-${lastName}-${type}.${extension}`;
@@ -35,27 +84,25 @@ const uploadToS3 = async (file, firstName, lastName, type) => {
   };
 
   await s3.send(new PutObjectCommand(params));
-  return key; // just return the key, not full URL
+  return key;
 };
 
-// 👇 Get a signed URL from S3 key
+// Get a signed URL from S3 key
 const generateSignedUrl = async (key) => {
   const command = new GetObjectCommand({
     Bucket: process.env.AWS_S3_BUCKET,
     Key: key,
   });
-  return await getSignedUrl(s3, command, { expiresIn: 60 * 60 }); // 1 hour
+  return await getSignedUrl(s3, command, { expiresIn: 60 * 60 });
 };
 
-// ✅ GET all bookings (with signed URLs)
+// GET all bookings
 router.get('/', async (req, res) => {
   try {
     const bookings = await Booking.find().sort({ createdAt: -1 });
 
     const signedBookings = await Promise.all(bookings.map(async (b) => {
-      const result = {
-        ...b.toObject(),
-      };
+      const result = { ...b.toObject() };
 
       if (b.licenseFileUrl) {
         result.licenseSignedUrl = await generateSignedUrl(b.licenseFileUrl);
@@ -75,7 +122,7 @@ router.get('/', async (req, res) => {
   }
 });
 
-// ✅ POST new booking
+// POST new booking
 router.post('/', upload, async (req, res) => {
   try {
     const {
@@ -87,9 +134,10 @@ router.post('/', upload, async (req, res) => {
       insurance,
     } = req.body;
 
+    const days = parseInt(numberOfDays);
     const start = new Date(startDateTime);
     const end = new Date(start);
-    end.setDate(start.getDate() + parseInt(numberOfDays));
+    end.setDate(start.getDate() + days);
 
     const licenseKey = req.files.licenseFile
       ? await uploadToS3(req.files.licenseFile[0], firstName, lastName, 'License')
@@ -99,14 +147,17 @@ router.post('/', upload, async (req, res) => {
       ? await uploadToS3(req.files.passportFile[0], firstName, lastName, 'Passport')
       : null;
 
+    const totalPrice = calculatePrice(days, insurance, bike); // ✅ Updated logic with surcharge
+
     const newBooking = new Booking({
       firstName,
       lastName,
       startDateTime: start,
       endDateTime: end,
-      numberOfDays,
+      numberOfDays: days,
       bike,
       insurance,
+      totalPrice,
       licenseFileUrl: licenseKey,
       passportFileUrl: passportKey,
     });

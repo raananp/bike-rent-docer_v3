@@ -2,7 +2,8 @@ import React from 'react';
 import { AppBar, Toolbar, Typography, Box, Button } from '@mui/material';
 import { Link } from 'react-router-dom';
 
-const navItems = ['Home', 'Bikes', 'Booking', 'Contact'];
+// Updated navItems: replace 'Contact' with 'Admin'
+const navItems = ['Home', 'Bikes', 'Booking', 'Admin'];
 
 const Navbar = () => {
   return (

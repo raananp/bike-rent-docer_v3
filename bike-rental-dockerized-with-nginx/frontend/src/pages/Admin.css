@@ -1,0 +1,113 @@
+.admin-container {
+    padding: 6rem 2rem 3rem;
+    color: white;
+    font-family: 'Roboto', sans-serif;
+  }
+  
+  /* Tabs */
+  .admin-tabs .MuiTab-root {
+    color: white !important;
+  }
+  
+  .admin-tabs .Mui-selected {
+    color: #4caf50 !important;
+  }
+  
+  /* Metrics Grid */
+  .admin-metrics {
+    margin-bottom: 3rem;
+  }
+  
+  .metric-card {
+    background: transparent !important;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 12px;
+    text-align: center;
+    box-shadow: none;
+  }
+  
+  .metric-title {
+    font-size: 1rem;
+    color: white;
+  }
+  
+  .metric-value {
+    font-size: 2rem;
+    font-weight: bold;
+    color: #4caf50;
+  }
+  
+  /* Section Titles */
+  .admin-section-title {
+    margin: 2rem 0 1rem;
+    font-size: 1.5rem;
+    font-weight: 500;
+    color: #fff;
+  }
+  
+  /* Tables */
+  .admin-user-table {
+    width: 100%;
+    border-collapse: collapse;
+    background: rgba(255, 255, 255, 0.04);
+    border-radius: 12px;
+    overflow: hidden;
+    margin-top: 1rem;
+  }
+  
+  .admin-user-table th,
+  .admin-user-table td {
+    padding: 1rem;
+    text-align: left;
+    color: white;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  }
+  
+  .admin-user-table th {
+    font-weight: 600;
+    background: rgba(255, 255, 255, 0.1);
+  }
+  
+  .admin-user-table tr:hover {
+    background: rgba(255, 255, 255, 0.07);
+  }
+  
+  .admin-user-table td:nth-child(1) { width: 25%; }
+  .admin-user-table td:nth-child(2) { width: 20%; }
+  .admin-user-table td:nth-child(3),
+  .admin-user-table td:nth-child(4),
+  .admin-user-table td:nth-child(5),
+  .admin-user-table td:nth-child(6) { width: 12%; }
+  
+  .booking-table {
+    margin-top: 2rem;
+  }
+  
+  /* Make user dropdown white */
+  .MuiInputLabel-root {
+    color: white !important;
+  }
+  
+  .MuiOutlinedInput-root {
+    color: white !important;
+  }
+  
+  .MuiOutlinedInput-notchedOutline {
+    border-color: white !important;
+  }
+  
+  .MuiSvgIcon-root {
+    color: white !important;
+  }
+  
+  .MuiSelect-icon {
+    color: white !important;
+  }
+  .booking-search {
+    margin: 1rem 0;
+    padding: 0.5rem;
+    width: 100%;
+    max-width: 300px;
+    border: 1px solid #ccc;
+    border-radius: 8px;
+  }

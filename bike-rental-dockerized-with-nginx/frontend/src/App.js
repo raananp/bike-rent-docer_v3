@@ -3,7 +3,7 @@ import { Routes, Route, useLocation } from 'react-router-dom';
 import { AnimatePresence } from 'framer-motion';
 import Home from './pages/Home';
 import Booking from './pages/Booking';
-import Contact from './pages/Contact';
+import Admin from './pages/Admin'; // ✅ updated
 import Bikes from './pages/Bikes';
 import Navbar from './components/Navbar';
 
@@ -18,7 +18,7 @@ function App() {
           <Route path="/" element={<Home />} />
           <Route path="/bikes" element={<Bikes />} />
           <Route path="/booking" element={<Booking />} />
-          <Route path="/contact" element={<Contact />} />
+          <Route path="/admin" element={<Admin />} /> {/* ✅ updated */}
         </Routes>
       </AnimatePresence>
     </>
