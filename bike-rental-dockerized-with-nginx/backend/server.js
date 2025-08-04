@@ -6,7 +6,8 @@ const path = require('path');
 
 const bookingsRoute = require('./routes/bookings');
 const adminRoutes = require('./routes/admin');
-const bikeRoutes = require('./routes/bikeRoutes'); // ✅ Import bike routes
+const bikeRoutes = require('./routes/bikeRoutes');
+const authRoutes = require('./routes/auth'); // ✅ Add this line
 
 const app = express();
 
@@ -16,7 +17,8 @@ app.use(express.json());
 // API routes
 app.use('/api/bookings', bookingsRoute);
 app.use('/api/admin', adminRoutes);
-app.use('/api/bikes', bikeRoutes); // ✅ Mount bike route
+app.use('/api/bikes', bikeRoutes);
+app.use('/api/auth', authRoutes); // ✅ Mount the new auth route
 
 // MongoDB connection
 mongoose.connect(process.env.MONGO_URI, {

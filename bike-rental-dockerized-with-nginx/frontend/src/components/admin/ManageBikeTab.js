@@ -8,7 +8,7 @@ import { getBikes, addBike } from '../../utils/api';
 
 function ManageBikeTab() {
   const [bikeForm, setBikeForm] = useState({
-    name: '', model: '', km: '', perDay: '', perWeek: '', perMonth: ''
+    name: '', modelYear: '', km: '', perDay: '', perWeek: '', perMonth: ''
   });
   const [bikeList, setBikeList] = useState([]);
 
@@ -23,15 +23,21 @@ function ManageBikeTab() {
 
   const handleBrandChange = (e) => {
     const name = e.target.value;
-    setBikeForm({ ...bikeForm, name, model: '' });
+    setBikeForm({ ...bikeForm, name, modelYear: '' });
   };
 
   const handleAddBike = async () => {
     const res = await addBike(bikeForm);
     if (res.ok) {
-      setBikeForm({ name: '', model: '', km: '', perDay: '', perWeek: '', perMonth: '' });
+      setBikeForm({ name: '', modelYear: '', km: '', perDay: '', perWeek: '', perMonth: '' });
       fetchBikeList();
     }
+  };
+
+  const underlineWhite = {
+    color: 'white',
+    '&:before': { borderBottom: '1px solid white' },
+    '&:after': { borderBottom: '2px solid white' }
   };
 
   return (
@@ -39,7 +45,7 @@ function ManageBikeTab() {
       <Typography variant="h6" sx={{ color: 'white', mb: 2 }}>Add New Bike</Typography>
       <Grid container spacing={2}>
         <Grid item xs={6} sm={4} md={3}>
-          <FormControl fullWidth variant="standard">
+          <FormControl fullWidth variant="standard" sx={underlineWhite}>
             <InputLabel sx={{ color: 'white' }}>Brand</InputLabel>
             <Select value={bikeForm.name} onChange={handleBrandChange} sx={{ color: 'white' }}>
               {Object.keys(bikeOptions).map((brand) => (
@@ -49,11 +55,11 @@ function ManageBikeTab() {
           </FormControl>
         </Grid>
         <Grid item xs={6} sm={4} md={3}>
-          <FormControl fullWidth variant="standard">
+          <FormControl fullWidth variant="standard" sx={underlineWhite}>
             <InputLabel sx={{ color: 'white' }}>Model</InputLabel>
             <Select
-              value={bikeForm.model}
-              onChange={(e) => setBikeForm({ ...bikeForm, model: e.target.value })}
+              value={bikeForm.modelYear}
+              onChange={(e) => setBikeForm({ ...bikeForm, modelYear: e.target.value })}
               sx={{ color: 'white' }}
             >
               {(bikeOptions[bikeForm.name] || []).map((model) => (
@@ -72,6 +78,7 @@ function ManageBikeTab() {
               onChange={(e) => setBikeForm({ ...bikeForm, [field]: e.target.value })}
               InputLabelProps={{ style: { color: 'white' } }}
               inputProps={{ style: { color: 'white' } }}
+              sx={underlineWhite}
             />
           </Grid>
         ))}
@@ -98,7 +105,7 @@ function ManageBikeTab() {
           {bikeList.map((b) => (
             <TableRow key={b._id}>
               <TableCell sx={{ color: 'white' }}>{b.name}</TableCell>
-              <TableCell sx={{ color: 'white' }}>{b.model}</TableCell>
+              <TableCell sx={{ color: 'white' }}>{b.modelYear}</TableCell>
               <TableCell sx={{ color: 'white' }}>{b.km}</TableCell>
               <TableCell sx={{ color: 'white' }}>{b.perDay}</TableCell>
               <TableCell sx={{ color: 'white' }}>{b.perWeek}</TableCell>

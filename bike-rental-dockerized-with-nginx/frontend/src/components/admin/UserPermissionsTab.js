@@ -1,9 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import {
   Box, Table, TableHead, TableRow, TableCell, TableBody,
-  Select, MenuItem
+  Select, MenuItem, Button
 } from '@mui/material';
-import { getUsers, updateUserRole } from '../../utils/api';
+import { getUsers, updateUserRole, deleteUser } from '../../utils/api';
 
 function UserPermissionsTab() {
   const [users, setUsers] = useState([]);
@@ -22,6 +22,13 @@ function UserPermissionsTab() {
     fetchUsers();
   };
 
+  const handleDelete = async (id) => {
+    if (window.confirm('Are you sure you want to delete this user?')) {
+      await deleteUser(id);
+      fetchUsers();
+    }
+  };
+
   return (
     <Box sx={{ mt: 3 }}>
       <Table>
@@ -30,6 +37,7 @@ function UserPermissionsTab() {
             <TableCell sx={{ color: 'white' }}>Email</TableCell>
             <TableCell sx={{ color: 'white' }}>Role</TableCell>
             <TableCell sx={{ color: 'white' }}>Change</TableCell>
+            <TableCell sx={{ color: 'white' }}>Actions</TableCell>
           </TableRow>
         </TableHead>
         <TableBody>
@@ -46,6 +54,15 @@ function UserPermissionsTab() {
                   <MenuItem value="user">User</MenuItem>
                   <MenuItem value="admin">Admin</MenuItem>
                 </Select>
+              </TableCell>
+              <TableCell>
+                <Button
+                  variant="outlined"
+                  color="error"
+                  onClick={() => handleDelete(u._id)}
+                >
+                  Delete
+                </Button>
               </TableCell>
             </TableRow>
           ))}

@@ -33,3 +33,10 @@ export const getStats = async () => {
       body: JSON.stringify({ role }),
     });
   };
+
+  export const deleteUser = async (id) => {
+    const res = await fetch(`/api/auth/users/${id}`, {
+      method: 'DELETE',
+    });
+    if (!res.ok) throw new Error('Failed to delete user');
+  };

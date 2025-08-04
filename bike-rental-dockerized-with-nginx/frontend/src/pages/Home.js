@@ -69,6 +69,7 @@ const ScrollSection = ({ title, subtitles, image, reverse }) => {
           maxWidth: '500px',
           borderRadius: '20px',
           boxShadow: '0 10px 30px rgba(0,0,0,0.5)',
+          display: 'block',
         }}
       />
     </Box>
@@ -81,6 +82,9 @@ const Footer = () => (
       padding: '40px 20px',
       borderTop: '1px solid #444',
       color: '#fff',
+      backgroundColor: '#121212',
+      width: '100%',
+      overflowX: 'hidden',
     }}
   >
     <Grid container spacing={4} alignItems="flex-start">
@@ -93,56 +97,72 @@ const Footer = () => (
         <Typography>Location: Pattaya, Thailand</Typography>
       </Grid>
       <Grid item xs={12} md={6}>
-        <iframe
-          title="Google Maps Pattaya"
-          src="https://maps.google.com/maps?q=pattaya&t=&z=13&ie=UTF8&iwloc=&output=embed"
-          width="100%"
-          height="250"
-          style={{ border: 0 }}
-          allowFullScreen=""
-          loading="lazy"
-        ></iframe>
+        <Box sx={{ width: '100%', overflow: 'hidden' }}>
+          <iframe
+            title="Google Maps Pattaya"
+            src="https://maps.google.com/maps?q=pattaya&t=&z=13&ie=UTF8&iwloc=&output=embed"
+            width="100%"
+            height="250"
+            style={{ border: 0, display: 'block' }}
+            allowFullScreen=""
+            loading="lazy"
+          ></iframe>
+        </Box>
       </Grid>
     </Grid>
   </Box>
 );
 
+const pageVariants = {
+  initial: { opacity: 0, y: 20 },
+  animate: { opacity: 1, y: 0, transition: { duration: 0.5 } },
+  exit: { opacity: 0, y: -20, transition: { duration: 0.3 } },
+};
+
 const Home = () => {
   return (
-    <Box sx={{ backgroundColor: '#121212', overflowX: 'hidden', m: 0, p: 0 }}>
-      <ScrollSection
-        title="Ride in Style"
-        subtitles={[
-          'Choose from a wide range of premium motorcycles — cruisers, sport models, and more.',
-          'All bikes are regularly serviced for optimal safety and performance.',
-          'Helmet and safety gear included for all rentals at no extra cost.',
-          'Flexible pricing for daily, weekly, or monthly rentals tailored to your needs.',
-        ]}
-        image="/images/bike_h3.jpg"
-      />
-      <ScrollSection
-        title="Book in Seconds"
-        subtitles={[
-          'Enjoy a seamless booking process from any device — mobile or desktop.',
-          'Instant booking confirmation with real-time availability updates.',
-          'Easily upload your license and passport, and choose add-ons like insurance.',
-          'Secure payments and 24/7 customer support you can count on.',
-        ]}
-        image="/images/bike_h1.jpg"
-        reverse
-      />
-      <ScrollSection
-        title="Explore Thailand"
-        subtitles={[
-          'From the beaches of Pattaya to the hills of Chiang Mai — ride with freedom.',
-          'Our bikes are perfect for exploring off-the-beaten-path locations.',
-          'We offer trip planning help, route tips, and GPS options upon request.',
-          'Make your trip unforgettable with the best way to travel in Thailand.',
-        ]}
-        image="/images/bike3.jpg"
-      />
-      <Footer />
-    </Box>
+    <motion.div
+      variants={pageVariants}
+      initial="initial"
+      animate="animate"
+      exit="exit"
+      style={{ overflowX: 'hidden' }}
+    >
+      <Box sx={{ backgroundColor: '#121212', m: 0, p: 0, overflowX: 'hidden' }}>
+        <ScrollSection
+          title="Ride in Style"
+          subtitles={[
+            'Choose from a wide range of premium motorcycles — cruisers, sport models, and more.',
+            'All bikes are regularly serviced for optimal safety and performance.',
+            'Helmet and safety gear included for all rentals at no extra cost.',
+            'Flexible pricing for daily, weekly, or monthly rentals tailored to your needs.',
+          ]}
+          image="/images/bike_h3.jpg"
+        />
+        <ScrollSection
+          title="Book in Seconds"
+          subtitles={[
+            'Enjoy a seamless booking process from any device — mobile or desktop.',
+            'Instant booking confirmation with real-time availability updates.',
+            'Easily upload your license and passport, and choose add-ons like insurance.',
+            'Secure payments and 24/7 customer support you can count on.',
+          ]}
+          image="/images/bike_h1.jpg"
+          reverse
+        />
+        <ScrollSection
+          title="Explore Thailand"
+          subtitles={[
+            'From the beaches of Pattaya to the hills of Chiang Mai — ride with freedom.',
+            'Our bikes are perfect for exploring off-the-beaten-path locations.',
+            'We offer trip planning help, route tips, and GPS options upon request.',
+            'Make your trip unforgettable with the best way to travel in Thailand.',
+          ]}
+          image="/images/bike3.jpg"
+        />
+        <Footer />
+      </Box>
+    </motion.div>
   );
 };
 
