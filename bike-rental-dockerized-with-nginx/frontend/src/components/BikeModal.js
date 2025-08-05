@@ -16,17 +16,20 @@ const overlayStyle = {
   alignItems: 'center',
   justifyContent: 'center',
   zIndex: 9999,
+  padding: '12px', // for small screen padding
 };
 
 const modalStyle = {
-  width: '90%',
+  width: '100%',
   maxWidth: '600px',
   background: '#1e1e1e',
   borderRadius: '16px',
-  padding: '24px',
+  padding: '20px',
   color: 'white',
   position: 'relative',
   boxShadow: '0 0 20px rgba(0,0,0,0.5)',
+  overflowY: 'auto',
+  maxHeight: '90vh', // allow scroll on mobile if content too long
 };
 
 const BikeModal = ({ bike, onClose }) => {
@@ -67,18 +70,48 @@ const BikeModal = ({ bike, onClose }) => {
               alt={bike.title}
               style={{
                 width: '100%',
-                maxHeight: '300px',
+                height: 'auto',
+                maxHeight: '280px',
                 objectFit: 'cover',
                 borderRadius: '12px',
                 marginBottom: '16px',
               }}
             />
 
-            <Typography variant="h5" gutterBottom>{bike.title}</Typography>
-            <Typography variant="body1" gutterBottom>{bike.description}</Typography>
-            <Typography variant="body2">Year: {bike.year}</Typography>
-            <Typography variant="body2">Kilometers: {bike.km}</Typography>
-            <Typography variant="body2" sx={{ mt: 2 }}>
+            <Typography
+              variant="h6"
+              gutterBottom
+              sx={{ fontSize: { xs: '1.1rem', sm: '1.5rem' } }}
+            >
+              {bike.title}
+            </Typography>
+
+            <Typography
+              variant="body1"
+              gutterBottom
+              sx={{ fontSize: { xs: '0.95rem', sm: '1rem' } }}
+            >
+              {bike.description}
+            </Typography>
+
+            <Typography
+              variant="body2"
+              sx={{ fontSize: { xs: '0.85rem', sm: '0.95rem' } }}
+            >
+              Year: {bike.year}
+            </Typography>
+
+            <Typography
+              variant="body2"
+              sx={{ fontSize: { xs: '0.85rem', sm: '0.95rem' } }}
+            >
+              Kilometers: {bike.km}
+            </Typography>
+
+            <Typography
+              variant="body2"
+              sx={{ mt: 2, fontSize: { xs: '0.85rem', sm: '0.95rem' } }}
+            >
               <strong>Price:</strong><br />
               Per Day: ฿{bike.pricePerDay}<br />
               Per Week: ฿{bike.pricePerWeek}<br />
@@ -86,8 +119,13 @@ const BikeModal = ({ bike, onClose }) => {
             </Typography>
 
             <Button
+              fullWidth
               variant="contained"
-              sx={{ mt: 3 }}
+              sx={{
+                mt: 3,
+                fontWeight: 'bold',
+                fontSize: { xs: '0.9rem', sm: '1rem' },
+              }}
               onClick={handleBookClick}
             >
               Book

@@ -8,7 +8,8 @@ WORKDIR /app
 COPY package*.json ./
 RUN npm install
 RUN npm install @mui/icons-material@5.11.0
-RUN npm install axios jwt-decode@3.1.2
+#RUN npm install axios jwt-decode@3.1.2 react-swipeable-views
+RUN npm install axios jwt-decode@3.1.2 react-swipeable-views --legacy-peer-deps
 
 
 # Copy rest of the app

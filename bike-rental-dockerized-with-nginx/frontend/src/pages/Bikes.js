@@ -56,25 +56,36 @@ function Bikes() {
 
   return (
     <motion.div variants={pageVariants} initial="initial" animate="animate" exit="exit">
-      <Container sx={{ mt: 6, mb: 6 }}>
-        <Typography variant="h4" gutterBottom>
+      <Container sx={{ mt: { xs: 4, md: 6 }, mb: { xs: 4, md: 6 }, px: { xs: 2, sm: 3 } }}>
+        <Typography
+          variant="h4"
+          gutterBottom
+          sx={{ textAlign: { xs: 'center', md: 'left' }, fontSize: { xs: '1.8rem', md: '2.2rem' } }}
+        >
           Explore Our Bikes
         </Typography>
-        <Typography variant="body1" sx={{ mb: 4 }}>
+
+        <Typography
+          variant="body1"
+          sx={{ mb: 4, textAlign: { xs: 'center', md: 'left' }, fontSize: { xs: '0.95rem', md: '1rem' } }}
+        >
           All our bikes are new, well-maintained, and ready for adventure. Perfect for your ride in Pattaya.
         </Typography>
 
         <Grid container spacing={4}>
           {dummyBikes.map((bike, i) => (
             <Grid item xs={12} sm={6} md={4} key={i}>
-              <div onClick={() => handleCardClick(bike)}>
+              <div
+                onClick={() => handleCardClick(bike)}
+                style={{ cursor: 'pointer' }}
+              >
                 <BikeCard {...bike} />
               </div>
             </Grid>
           ))}
         </Grid>
 
-        {/* Modal */}
+        {/* Bike Details Modal */}
         <BikeModal bike={selectedBike} onClose={handleCloseModal} />
       </Container>
     </motion.div>

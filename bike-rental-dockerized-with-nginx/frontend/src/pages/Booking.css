@@ -1,3 +1,4 @@
+/* --- EXISTING STYLES UNCHANGED --- */
 .uploaded-files img.uploaded-image {
   margin-top: 10px;
   max-width: 100%;
@@ -25,7 +26,6 @@
   gap: 20px;
 }
 
-/* Side-by-side first and last name inputs */
 .name-fields {
   display: flex;
   gap: 20px;
@@ -35,27 +35,31 @@
   flex: 1;
 }
 
-/* Inputs with underline only */
 .booking-form input[type="text"],
 .booking-form input[type="date"],
 .booking-form input[type="datetime-local"],
 .booking-form input[type="number"],
-.booking-form select {
+.booking-form select,
+.booking-form input[type="password"],
+.booking-form input[type="email"] {
   background: transparent;
-  border: none;
-  border-bottom: 2px solid #555;
+  border: 1px solid #ccc; /* ⬅️ Add full border for better mobile visibility */
   color: white;
   font-size: 16px;
-  padding: 8px 4px;
+  padding: 8px 12px;
   outline: none;
+  border-radius: 6px;
 }
 
 .booking-form select {
   background-color: #1e1e1e;
-  border-radius: 0;
+  border-radius: 6px;
 }
 
-/* Date picker fix */
+.booking-form input::placeholder {
+  color: #bbb;
+}
+
 .booking-form input[type="date"]::-webkit-calendar-picker-indicator,
 .booking-form input[type="datetime-local"]::-webkit-calendar-picker-indicator {
   filter: invert(1);
@@ -93,7 +97,6 @@
   background-color: #0056b3;
 }
 
-/* Booking Cards */
 .booking-cards-container {
   flex: 1 1 500px;
 }
@@ -119,4 +122,37 @@
 
 .booking-card p {
   margin: 6px 0;
+}
+
+/* ✅ MOBILE RESPONSIVENESS */
+@media (max-width: 768px) {
+  .booking-page {
+    flex-direction: column;
+    padding: 80px 20px 20px 20px;
+    gap: 20px;
+  }
+
+  .name-fields {
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .file-uploads {
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .booking-form input,
+  .booking-form select {
+    font-size: 14px;
+    padding: 10px;
+  }
+
+  .booking-form button {
+    width: 100%;
+  }
+
+  .price-preview p {
+    font-size: 14px;
+  }
 }

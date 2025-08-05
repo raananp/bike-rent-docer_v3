@@ -13,7 +13,6 @@ router.get('/bookings/stats', async (req, res) => {
     const totalProfit = bookings.reduce((sum, b) => sum + (b.totalPrice || 0), 0);
     const activeBookings = bookings.filter(b => new Date(b.endDateTime) > new Date()).length;
 
-    // 🏍️ Profit by Bike logic
     const profitByBike = {};
     bookings.forEach(b => {
       if (b.bike && b.totalPrice) {
@@ -31,7 +30,7 @@ router.get('/bookings/stats', async (req, res) => {
 // ✅ Get All Users (for Admin tab)
 router.get('/users', async (req, res) => {
   try {
-    const users = await User.find({}, 'email role');
+    const users = await User.find({}, 'firstName lastName email role'); // ✅ include firstName and lastName
     res.json(users);
   } catch (err) {
     console.error('Users fetch error:', err);

@@ -34,6 +34,8 @@ function UserPermissionsTab() {
       <Table>
         <TableHead>
           <TableRow>
+            <TableCell sx={{ color: 'white' }}>First Name</TableCell>
+            <TableCell sx={{ color: 'white' }}>Last Name</TableCell>
             <TableCell sx={{ color: 'white' }}>Email</TableCell>
             <TableCell sx={{ color: 'white' }}>Role</TableCell>
             <TableCell sx={{ color: 'white' }}>Change</TableCell>
@@ -43,6 +45,8 @@ function UserPermissionsTab() {
         <TableBody>
           {users.map((u) => (
             <TableRow key={u._id}>
+              <TableCell sx={{ color: 'white' }}>{u.firstName || '-'}</TableCell>
+              <TableCell sx={{ color: 'white' }}>{u.lastName || '-'}</TableCell>
               <TableCell sx={{ color: 'white' }}>{u.email}</TableCell>
               <TableCell sx={{ color: 'white' }}>{u.role}</TableCell>
               <TableCell>

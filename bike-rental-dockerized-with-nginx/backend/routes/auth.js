@@ -8,7 +8,7 @@ const JWT_SECRET = process.env.JWT_SECRET || 'secretkey';
 
 // POST /api/auth/signup
 router.post('/signup', async (req, res) => {
-  const { email, password } = req.body;
+  const { firstName, lastName, email, password } = req.body; // ➕ Extract first & last name
 
   try {
     const existingUser = await User.findOne({ email });
@@ -17,15 +17,23 @@ router.post('/signup', async (req, res) => {
     const hashedPassword = await bcrypt.hash(password, 10);
 
     const newUser = new User({
+      firstName,
+      lastName,
       email,
       password: hashedPassword,
-      role: 'user', // default role is "user"
+      role: 'user',
     });
 
     await newUser.save();
 
     const token = jwt.sign(
-      { id: newUser._id, email: newUser.email, role: newUser.role },
+      {
+        id: newUser._id,
+        firstName: newUser.firstName,
+        lastName: newUser.lastName,
+        email: newUser.email,
+        role: newUser.role
+      },
       JWT_SECRET,
       { expiresIn: '1d' }
     );
@@ -48,7 +56,13 @@ router.post('/login', async (req, res) => {
     }
 
     const token = jwt.sign(
-      { id: user._id, email: user.email, role: user.role },
+      {
+        id: user._id,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        email: user.email,
+        role: user.role
+      },
       JWT_SECRET,
       { expiresIn: '1d' }
     );
@@ -60,7 +74,7 @@ router.post('/login', async (req, res) => {
   }
 });
 
-// ✅ DELETE /api/auth/users/:id — Delete user by ID
+// DELETE /api/auth/users/:id — Delete user by ID
 router.delete('/users/:id', async (req, res) => {
   try {
     const deleted = await User.findByIdAndDelete(req.params.id);

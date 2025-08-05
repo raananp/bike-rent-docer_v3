@@ -19,21 +19,32 @@ function BikeCard({ image, title, description }) {
           transform: 'scale(1.03)',
         },
         cursor: 'pointer',
+        mx: 'auto', // centers card on mobile
       }}
     >
       <CardMedia
         component="img"
-        height="220"
         image={image}
         alt={title}
-        sx={{ objectFit: 'cover' }}
+        sx={{
+          height: { xs: 180, sm: 220 },
+          objectFit: 'cover',
+        }}
       />
-      <CardContent>
+      <CardContent sx={{ px: { xs: 2, sm: 3 }, py: { xs: 2, sm: 2.5 } }}>
         <Box>
-          <Typography variant="h6" gutterBottom>
+          <Typography
+            variant="h6"
+            gutterBottom
+            sx={{ fontSize: { xs: '1rem', sm: '1.25rem' } }}
+          >
             {title}
           </Typography>
-          <Typography variant="body2" color="text.secondary">
+          <Typography
+            variant="body2"
+            color="text.secondary"
+            sx={{ fontSize: { xs: '0.85rem', sm: '0.95rem' } }}
+          >
             {description}
           </Typography>
         </Box>

@@ -11,7 +11,14 @@ export const AuthProvider = ({ children }) => {
     const token = localStorage.getItem('token');
     if (token) {
       const decoded = jwt_decode(token);
-      setUser({ ...decoded, token });
+      setUser({
+        id: decoded.id,
+        email: decoded.email,
+        role: decoded.role,
+        firstName: decoded.firstName,
+        lastName: decoded.lastName,
+        token,
+      });
     }
   }, []);
 
@@ -19,14 +26,27 @@ export const AuthProvider = ({ children }) => {
     const res = await axios.post('/api/auth/login', { email, password });
     const decoded = jwt_decode(res.data.token);
     localStorage.setItem('token', res.data.token);
-    setUser({ ...decoded, token: res.data.token });
+    setUser({
+      id: decoded.id,
+      email: decoded.email,
+      role: decoded.role,
+      firstName: decoded.firstName,
+      lastName: decoded.lastName,
+      token: res.data.token,
+    });
   };
 
-  // ✅ NEW FUNCTION to support token-based login (used after signup)
   const loginWithToken = (token) => {
     const decoded = jwt_decode(token);
     localStorage.setItem('token', token);
-    setUser({ ...decoded, token });
+    setUser({
+      id: decoded.id,
+      email: decoded.email,
+      role: decoded.role,
+      firstName: decoded.firstName,
+      lastName: decoded.lastName,
+      token,
+    });
   };
 
   const logout = () => {
