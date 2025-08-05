@@ -3,11 +3,12 @@ const router = express.Router();
 const Bike = require('../models/Bike');
 const multer = require('multer');
 const multerS3 = require('multer-s3');
-const { S3Client } = require('@aws-sdk/client-s3');
+const { S3Client, GetObjectCommand } = require('@aws-sdk/client-s3');
+const { getSignedUrl } = require('@aws-sdk/s3-request-presigner');
 const { v4: uuidv4 } = require('uuid');
 require('dotenv').config();
 
-// AWS S3 client
+// S3 client setup
 const s3 = new S3Client({
   region: process.env.AWS_REGION,
   credentials: {
@@ -16,12 +17,12 @@ const s3 = new S3Client({
   },
 });
 
-// multer-s3 storage config
+// Multer S3 config
 const upload = multer({
   storage: multerS3({
     s3,
     bucket: process.env.AWS_S3_BUCKET,
-    acl: 'private', // can be 'public-read' if you want direct URL access
+    acl: 'private', // leave as private, we’ll sign the URL later
     contentType: multerS3.AUTO_CONTENT_TYPE,
     key: (req, file, cb) => {
       const ext = file.originalname.split('.').pop();
@@ -31,17 +32,44 @@ const upload = multer({
   }),
 });
 
-// GET all bikes
+// 🚀 GET all bikes with signed image URLs
 router.get('/', async (req, res) => {
   try {
     const bikes = await Bike.find();
-    res.json(bikes);
+
+    const signedBikes = await Promise.all(
+      bikes.map(async (bike) => {
+        let signedUrl = '';
+        if (bike.imageUrl) {
+          try {
+            const url = new URL(bike.imageUrl);
+            const key = decodeURIComponent(url.pathname.substring(1)); // FIX HERE
+
+            const command = new GetObjectCommand({
+              Bucket: process.env.AWS_S3_BUCKET,
+              Key: key,
+            });
+            signedUrl = await getSignedUrl(s3, command, { expiresIn: 3600 });
+          } catch (err) {
+            console.error(`Error signing URL for bike ${bike._id}:`, err.message);
+          }
+        }
+
+        return {
+          ...bike.toObject(),
+          signedImageUrl: signedUrl,
+        };
+      })
+    );
+
+    res.json(signedBikes);
   } catch (err) {
+    console.error('Failed to fetch bikes:', err);
     res.status(500).json({ error: 'Failed to fetch bikes' });
   }
 });
 
-// POST new bike with image upload
+// POST new bike with upload
 router.post('/', upload.single('imageFile'), async (req, res) => {
   try {
     const { name, modelYear, km, perDay, perWeek, perMonth } = req.body;
@@ -53,7 +81,7 @@ router.post('/', upload.single('imageFile'), async (req, res) => {
       perDay,
       perWeek,
       perMonth,
-      imageUrl: req.file?.location || '', // Save S3 image URL
+      imageUrl: req.file?.location || '',
     });
 
     await newBike.save();

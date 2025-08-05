@@ -70,11 +70,11 @@ export default function Bikes() {
               elevation={6}
             >
               <CardMedia
-                component="img"
-                height="220"
-                image={bike.imageUrl || '/images/bike_placeholder.jpg'}
-                alt={`${bike.name} ${bike.modelYear}`}
-              />
+  component="img"
+  height="220"
+  image={bike.signedImageUrl || '/images/bike_placeholder.jpg'}
+  alt={`${bike.name} ${bike.modelYear}`}
+/>
               <CardContent>
                 <Typography variant="h6">
                   {bike.name} {bike.modelYear}
