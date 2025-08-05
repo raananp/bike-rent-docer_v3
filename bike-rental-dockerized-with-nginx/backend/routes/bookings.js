@@ -5,6 +5,7 @@ const mime = require('mime-types');
 const { S3Client, PutObjectCommand, GetObjectCommand } = require('@aws-sdk/client-s3');
 const { getSignedUrl } = require('@aws-sdk/s3-request-presigner');
 const Booking = require('../models/Booking');
+const Bike = require('../models/Bike'); // ✅ Needed to pull image URLs
 
 const router = express.Router();
 
@@ -26,21 +27,9 @@ const upload = multer({ storage }).fields([
 
 // 🧮 Pricing logic
 const bikePricing = {
-  'Honda CB650R E-Clutch': {
-    perDay: 500,
-    perWeek: 3200,
-    perMonth: 9800,
-  },
-  'Harley Davidson Fat Boy 2021': {
-    perDay: 600,
-    perWeek: 3900,
-    perMonth: 10500,
-  },
-  'Harley Davidson Fat Boy 1990': {
-    perDay: 450,
-    perWeek: 3000,
-    perMonth: 9000,
-  },
+  'Honda CB650R E-Clutch': { perDay: 500, perWeek: 3200, perMonth: 9800 },
+  'Harley Davidson Fat Boy 2021': { perDay: 600, perWeek: 3900, perMonth: 10500 },
+  'Harley Davidson Fat Boy 1990': { perDay: 450, perWeek: 3000, perMonth: 9000 },
 };
 
 const calculatePrice = (days, insurance, bike) => {
@@ -60,7 +49,7 @@ const calculatePrice = (days, insurance, bike) => {
 
   total += remaining * pricing.perDay;
 
-  // 🟡 Add base surcharge: 50 THB per day
+  // 🟡 Add base surcharge
   total += days * 50;
 
   // ✅ Insurance surcharge
@@ -71,7 +60,7 @@ const calculatePrice = (days, insurance, bike) => {
   return total;
 };
 
-// Upload to S3 with clean filename convention
+// Upload file to S3
 const uploadToS3 = async (file, firstName, lastName, type) => {
   const extension = mime.extension(file.mimetype);
   const key = `${firstName}-${lastName}-${type}.${extension}`;
@@ -87,35 +76,54 @@ const uploadToS3 = async (file, firstName, lastName, type) => {
   return key;
 };
 
-// Get a signed URL from S3 key
+// Get pre-signed URL for file in S3
 const generateSignedUrl = async (key) => {
   const command = new GetObjectCommand({
     Bucket: process.env.AWS_S3_BUCKET,
     Key: key,
   });
-  return await getSignedUrl(s3, command, { expiresIn: 60 * 60 });
+  return await getSignedUrl(s3, command, { expiresIn: 3600 });
 };
 
 // GET all bookings
 router.get('/', async (req, res) => {
   try {
     const bookings = await Booking.find().sort({ createdAt: -1 });
+    const bikes = await Bike.find();
 
-    const signedBookings = await Promise.all(bookings.map(async (b) => {
-      const result = { ...b.toObject() };
+    const bikeMap = {};
+    bikes.forEach((b) => {
+      const key = `${b.name} ${b.modelYear}`.trim();
+      bikeMap[key] = b;
+    });
 
-      if (b.licenseFileUrl) {
-        result.licenseSignedUrl = await generateSignedUrl(b.licenseFileUrl);
-      }
+    const enrichedBookings = await Promise.all(
+      bookings.map(async (b) => {
+        const result = { ...b.toObject() };
 
-      if (b.passportFileUrl) {
-        result.passportSignedUrl = await generateSignedUrl(b.passportFileUrl);
-      }
+        if (b.licenseFileUrl) {
+          result.licenseSignedUrl = await generateSignedUrl(b.licenseFileUrl);
+        }
 
-      return result;
-    }));
+        if (b.passportFileUrl) {
+          result.passportSignedUrl = await generateSignedUrl(b.passportFileUrl);
+        }
 
-    res.json(signedBookings);
+        // Add bike image + prices from DB
+        const bike = bikeMap[b.bike];
+        if (bike) {
+          result.bikeImageUrl = bike.imageUrl || '';
+          result.perDay = bike.perDay;
+          result.perWeek = bike.perWeek;
+          result.perMonth = bike.perMonth;
+          result.km = bike.km;
+        }
+
+        return result;
+      })
+    );
+
+    res.json(enrichedBookings);
   } catch (err) {
     console.error('Failed to get bookings:', err);
     res.status(500).json({ error: 'Failed to fetch bookings' });
@@ -147,7 +155,7 @@ router.post('/', upload, async (req, res) => {
       ? await uploadToS3(req.files.passportFile[0], firstName, lastName, 'Passport')
       : null;
 
-    const totalPrice = calculatePrice(days, insurance, bike); // ✅ Updated logic with surcharge
+    const totalPrice = calculatePrice(days, insurance, bike);
 
     const newBooking = new Booking({
       firstName,

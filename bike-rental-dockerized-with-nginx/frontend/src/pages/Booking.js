@@ -15,32 +15,43 @@ export default function Booking() {
   const [licenseFile, setLicenseFile] = useState(null);
   const [passportFile, setPassportFile] = useState(null);
   const [bookings, setBookings] = useState([]);
+  const [bikesData, setBikesData] = useState([]);
   const [statusMessage, setStatusMessage] = useState('');
   const [showFiles, setShowFiles] = useState({});
   const [pricePreview, setPricePreview] = useState({ base: 0, insurance: 0, surcharge: 0, total: 0 });
 
-  const bikePricing = {
-    'Honda CB650R E-Clutch': { perDay: 500, perWeek: 3200, perMonth: 9800 },
-    'Harley Davidson Fat Boy 2021': { perDay: 600, perWeek: 3900, perMonth: 10500 },
-    'Harley Davidson Fat Boy 1990': { perDay: 450, perWeek: 3000, perMonth: 9000 },
+  const fetchBookings = async () => {
+    const res = await fetch('/api/bookings');
+    const data = await res.json();
+    setBookings(data);
   };
 
-  const calculatePrice = (days, insurance, bike) => {
-    const pricing = bikePricing[bike];
-    if (!pricing || !days) return { base: 0, surcharge: 0, insurance: 0, total: 0 };
+  const fetchBikes = async () => {
+    try {
+      const res = await fetch('/api/bikes');
+      const data = await res.json();
+      setBikesData(data);
+    } catch (err) {
+      console.error('Failed to load bikes', err);
+    }
+  };
+
+  const calculatePrice = (days, insurance, bikeName) => {
+    const selectedBike = bikesData.find(b => `${b.name} ${b.modelYear}` === bikeName);
+    if (!selectedBike || !days) return { base: 0, surcharge: 0, insurance: 0, total: 0 };
 
     let base = 0;
     let remaining = days;
 
     const months = Math.floor(remaining / 30);
-    base += months * pricing.perMonth;
+    base += months * selectedBike.perMonth;
     remaining -= months * 30;
 
     const weeks = Math.floor(remaining / 7);
-    base += weeks * pricing.perWeek;
+    base += weeks * selectedBike.perWeek;
     remaining -= weeks * 7;
 
-    base += remaining * pricing.perDay;
+    base += remaining * selectedBike.perDay;
 
     const surcharge = days * 50;
     const insuranceCost = insurance ? days * 50 : 0;
@@ -49,25 +60,32 @@ export default function Booking() {
     return { base, surcharge, insurance: insuranceCost, total };
   };
 
-  const getPriceBreakdown = (days, insurance, bike) => {
-    return calculatePrice(parseInt(days), insurance, bike);
+  const formatDateTime = (isoString) => {
+    if (!isoString) return '';
+    const date = new Date(isoString);
+    return date.toLocaleString('en-GB', {
+      year: 'numeric',
+      month: 'short',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  };
+
+  const toggleViewFiles = (id) => {
+    setShowFiles((prev) => ({ ...prev, [id]: !prev[id] }));
   };
 
   useEffect(() => {
     fetchBookings();
+    fetchBikes();
   }, []);
 
   useEffect(() => {
     const days = parseInt(form.numberOfDays);
     const price = calculatePrice(days, form.insurance, form.bike);
     setPricePreview(price);
-  }, [form.numberOfDays, form.bike, form.insurance]);
-
-  const fetchBookings = async () => {
-    const res = await fetch('/api/bookings');
-    const data = await res.json();
-    setBookings(data);
-  };
+  }, [form.numberOfDays, form.bike, form.insurance, bikesData]);
 
   const handleFileChange = (e, type) => {
     const file = e.target.files[0];
@@ -145,22 +163,6 @@ export default function Booking() {
     }
   };
 
-  const formatDateTime = (isoString) => {
-    if (!isoString) return '';
-    const date = new Date(isoString);
-    return date.toLocaleString('en-GB', {
-      year: 'numeric',
-      month: 'short',
-      day: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit',
-    });
-  };
-
-  const toggleViewFiles = (id) => {
-    setShowFiles((prev) => ({ ...prev, [id]: !prev[id] }));
-  };
-
   return (
     <div className="booking-page">
       <div className="booking-form-container">
@@ -175,8 +177,8 @@ export default function Booking() {
           <input type="number" placeholder="Number of Days" value={form.numberOfDays} onChange={(e) => setForm({ ...form, numberOfDays: e.target.value })} required min={1} />
           <select value={form.bike} onChange={(e) => setForm({ ...form, bike: e.target.value })} required>
             <option value="">Select Bike</option>
-            {Object.keys(bikePricing).map((bikeName) => (
-              <option key={bikeName} value={bikeName}>{bikeName}</option>
+            {bikesData.map((b) => (
+              <option key={b._id} value={`${b.name} ${b.modelYear}`}>{`${b.name} ${b.modelYear}`}</option>
             ))}
           </select>
           <label className="checkbox">
@@ -189,15 +191,11 @@ export default function Booking() {
           </label>
           <div className="file-uploads">
             <label className="upload-label">
-              <span>
-                Upload License{licenseFile && <span className="checkmark"> ✅</span>}
-              </span>
+              <span>Upload License{licenseFile && <span className="checkmark"> ✅</span>}</span>
               <input type="file" accept="image/*" style={{ display: 'none' }} onChange={(e) => handleFileChange(e, 'license')} required={!form.provideDocsInOffice} />
             </label>
             <label className="upload-label">
-              <span>
-                Upload Passport{passportFile && <span className="checkmark"> ✅</span>}
-              </span>
+              <span>Upload Passport{passportFile && <span className="checkmark"> ✅</span>}</span>
               <input type="file" accept="image/*" style={{ display: 'none' }} onChange={(e) => handleFileChange(e, 'passport')} required={!form.provideDocsInOffice} />
             </label>
           </div>
@@ -217,9 +215,21 @@ export default function Booking() {
         <h3>All Bookings</h3>
         <div className="cards-wrapper">
           {bookings.map((b) => {
-            const breakdown = getPriceBreakdown(b.numberOfDays, b.insurance, b.bike);
+            const breakdown = calculatePrice(parseInt(b.numberOfDays), b.insurance, b.bike);
             return (
               <div key={b._id} className="booking-card">
+                {b.bikeImageUrl && (
+                  <img
+                    src={b.bikeImageUrl}
+                    alt={b.bike}
+                    style={{
+                      width: '100%',
+                      maxHeight: '180px',
+                      objectFit: 'cover',
+                      borderRadius: '10px',
+                    }}
+                  />
+                )}
                 <p><strong>Name:</strong> {b.firstName} {b.lastName}</p>
                 <p><strong>Start Date:</strong> {formatDateTime(b.startDateTime)}</p>
                 <p><strong>End Date:</strong> {formatDateTime(b.endDateTime)}</p>

@@ -18,11 +18,10 @@ export const getStats = async () => {
     return await res.json();
   };
   
-  export const addBike = async (bikeForm) => {
+  export const addBike = async (formData) => {
     return await fetch('/api/bikes', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(bikeForm),
+      body: formData, // Don't set Content-Type manually – browser will do it automatically
     });
   };
   

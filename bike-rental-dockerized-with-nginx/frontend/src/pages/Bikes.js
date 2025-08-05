@@ -1,95 +1,116 @@
-import React, { useState } from 'react';
-import { Container, Grid, Typography } from '@mui/material';
-import { motion } from 'framer-motion';
-import BikeCard from '../components/BikeCard';
-import BikeModal from '../components/BikeModal';
+import React, { useEffect, useState } from 'react';
+import {
+  Grid,
+  Card,
+  CardContent,
+  CardMedia,
+  Typography,
+  Modal,
+  Box,
+  Button,
+} from '@mui/material';
 
-const dummyBikes = [
-  {
-    image: '/images/bike2.jpg',
-    title: 'Honda CB650R E-Clutch',
-    description: 'Smooth power delivery with modern tech. Perfect for city and touring.',
-    year: 2023,
-    km: 3000,
-    pricePerDay: 500,
-    pricePerWeek: 3200,
-    pricePerMonth: 9800,
-  },
-  {
-    image: '/images/bike_h1.jpg',
-    title: 'Harley Davidson Fat Boy 2021',
-    description: 'Iconic design and raw power. A true American cruiser experience.',
-    year: 2021,
-    km: 9500,
-    pricePerDay: 600,
-    pricePerWeek: 3900,
-    pricePerMonth: 10500,
-  },
-  {
-    image: '/images/bike_h2.jpg',
-    title: 'Harley Davidson Fat Boy 1990',
-    description: 'Classic heritage with deep rumble and head-turning looks.',
-    year: 1990,
-    km: 18000,
-    pricePerDay: 450,
-    pricePerWeek: 3000,
-    pricePerMonth: 9000,
-  },
-];
-
-const pageVariants = {
-  initial: { opacity: 0, y: 20 },
-  animate: { opacity: 1, y: 0, transition: { duration: 0.5 } },
-  exit: { opacity: 0, y: -20, transition: { duration: 0.3 } },
+const modalStyle = {
+  position: 'absolute',
+  top: '50%',
+  left: '50%',
+  transform: 'translate(-50%, -50%)',
+  width: 400,
+  bgcolor: '#1a1a1a',
+  color: 'white',
+  borderRadius: '8px',
+  boxShadow: 24,
+  p: 4,
 };
 
-function Bikes() {
+export default function Bikes() {
+  const [bikes, setBikes] = useState([]);
   const [selectedBike, setSelectedBike] = useState(null);
+  const [modalOpen, setModalOpen] = useState(false);
+
+  const fetchBikes = async () => {
+    try {
+      const res = await fetch('/api/bikes');
+      const data = await res.json();
+      setBikes(data);
+    } catch (error) {
+      console.error('Failed to fetch bikes:', error);
+    }
+  };
 
   const handleCardClick = (bike) => {
     setSelectedBike(bike);
+    setModalOpen(true);
   };
 
-  const handleCloseModal = () => {
+  const handleClose = () => {
+    setModalOpen(false);
     setSelectedBike(null);
   };
 
+  useEffect(() => {
+    fetchBikes();
+  }, []);
+
   return (
-    <motion.div variants={pageVariants} initial="initial" animate="animate" exit="exit">
-      <Container sx={{ mt: { xs: 4, md: 6 }, mb: { xs: 4, md: 6 }, px: { xs: 2, sm: 3 } }}>
-        <Typography
-          variant="h4"
-          gutterBottom
-          sx={{ textAlign: { xs: 'center', md: 'left' }, fontSize: { xs: '1.8rem', md: '2.2rem' } }}
-        >
-          Explore Our Bikes
-        </Typography>
+    <div style={{ padding: '2rem' }}>
+      <Typography variant="h4" style={{ color: 'white', marginBottom: '1rem' }}>
+        Explore Our Bikes
+      </Typography>
+      <Typography variant="body1" style={{ color: 'gray', marginBottom: '2rem' }}>
+        All our bikes are new, well-maintained, and ready for adventure. Perfect for your ride in Pattaya.
+      </Typography>
 
-        <Typography
-          variant="body1"
-          sx={{ mb: 4, textAlign: { xs: 'center', md: 'left' }, fontSize: { xs: '0.95rem', md: '1rem' } }}
-        >
-          All our bikes are new, well-maintained, and ready for adventure. Perfect for your ride in Pattaya.
-        </Typography>
+      <Grid container spacing={4}>
+        {bikes.map((bike) => (
+          <Grid item xs={12} sm={6} md={4} key={bike._id}>
+            <Card
+              onClick={() => handleCardClick(bike)}
+              style={{ cursor: 'pointer', borderRadius: '15px' }}
+              elevation={6}
+            >
+              <CardMedia
+                component="img"
+                height="220"
+                image={bike.imageUrl || '/images/bike_placeholder.jpg'}
+                alt={`${bike.name} ${bike.modelYear}`}
+              />
+              <CardContent>
+                <Typography variant="h6">
+                  {bike.name} {bike.modelYear}
+                </Typography>
+                <Typography variant="body2" color="textSecondary">
+                  {bike.km} km driven
+                </Typography>
+              </CardContent>
+            </Card>
+          </Grid>
+        ))}
+      </Grid>
 
-        <Grid container spacing={4}>
-          {dummyBikes.map((bike, i) => (
-            <Grid item xs={12} sm={6} md={4} key={i}>
-              <div
-                onClick={() => handleCardClick(bike)}
-                style={{ cursor: 'pointer' }}
-              >
-                <BikeCard {...bike} />
-              </div>
-            </Grid>
-          ))}
-        </Grid>
-
-        {/* Bike Details Modal */}
-        <BikeModal bike={selectedBike} onClose={handleCloseModal} />
-      </Container>
-    </motion.div>
+      {/* Modal */}
+      <Modal open={modalOpen} onClose={handleClose}>
+        <Box sx={modalStyle}>
+          {selectedBike && (
+            <>
+              <Typography variant="h6" gutterBottom>
+                {selectedBike.name} {selectedBike.modelYear}
+              </Typography>
+              <Typography>Year: {selectedBike.modelYear}</Typography>
+              <Typography>Kilometers: {selectedBike.km}</Typography>
+              <Typography>Price:</Typography>
+              <Typography>Per Day: ฿ {selectedBike.perDay}</Typography>
+              <Typography>Per Week: ฿ {selectedBike.perWeek}</Typography>
+              <Typography>Per Month: ฿ {selectedBike.perMonth}</Typography>
+              <Box mt={2}>
+                <Button variant="contained" fullWidth>
+                  BOOK
+                </Button>
+              </Box>
+            </>
+          )}
+        </Box>
+      </Modal>
+    </div>
   );
 }
-
-export default Bikes;

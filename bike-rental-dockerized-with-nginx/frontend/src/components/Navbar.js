@@ -1,8 +1,10 @@
 import React, { useState, useContext } from 'react';
 import {
-  AppBar, Toolbar, Typography, Box, Button, Menu, MenuItem, IconButton, Drawer, List, ListItem, ListItemText
+  AppBar, Toolbar, Typography, Box, Button, Menu, MenuItem, IconButton,
+  Drawer, List, ListItem, ListItemText, Avatar
 } from '@mui/material';
 import MenuIcon from '@mui/icons-material/Menu';
+import AccountCircle from '@mui/icons-material/AccountCircle';
 import { Link, useNavigate } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContext';
 
@@ -14,7 +16,7 @@ const Navbar = () => {
   const { user, logout } = useContext(AuthContext);
   const navigate = useNavigate();
 
-  const handleAdminClick = (event) => {
+  const handleMenuOpen = (event) => {
     setAnchorEl(event.currentTarget);
   };
 
@@ -32,16 +34,27 @@ const Navbar = () => {
     setMobileOpen(!mobileOpen);
   };
 
-  const fullName = user?.firstName && user?.lastName ? `${user.firstName} ${user.lastName}` : '';
+  const fullName = user?.firstName && user?.lastName
+    ? `${user.firstName} ${user.lastName}`
+    : 'Guest';
 
   const drawer = (
     <Box sx={{ textAlign: 'center', px: 2, py: 4 }}>
-      <Typography variant="h6" component={Link} to="/" sx={{ color: '#fff', textDecoration: 'none', mb: 2, display: 'block' }}>
+      <Typography
+        variant="h6"
+        component={Link}
+        to="/"
+        sx={{ color: '#fff', textDecoration: 'none', mb: 2, display: 'block' }}
+      >
         Pattaya Bike Rental
       </Typography>
       <List>
         {navItems.map((item) => (
-          <ListItem button key={item} onClick={() => navigate(item === 'Home' ? '/' : `/${item.toLowerCase()}`)}>
+          <ListItem
+            button
+            key={item}
+            onClick={() => navigate(item === 'Home' ? '/' : `/${item.toLowerCase()}`)}
+          >
             <ListItemText primary={item} sx={{ color: '#fff' }} />
           </ListItem>
         ))}
@@ -75,7 +88,7 @@ const Navbar = () => {
       }}
     >
       <Toolbar sx={{ justifyContent: 'space-between' }}>
-        {/* Mobile Menu Button */}
+        {/* Mobile Menu */}
         <IconButton
           edge="start"
           color="inherit"
@@ -86,7 +99,7 @@ const Navbar = () => {
           <MenuIcon />
         </IconButton>
 
-        {/* Brand Logo */}
+        {/* Brand */}
         <Typography
           variant="h6"
           component={Link}
@@ -102,7 +115,7 @@ const Navbar = () => {
           Pattaya Bike Rental
         </Typography>
 
-        {/* Desktop Menu */}
+        {/* Desktop Links */}
         <Box sx={{ display: { xs: 'none', sm: 'flex' }, alignItems: 'center' }}>
           {navItems.map((item) => (
             <Button
@@ -125,57 +138,34 @@ const Navbar = () => {
             </Button>
           ))}
 
-          {user?.role === 'admin' && (
-            <>
-              <Button
-                onClick={handleAdminClick}
-                sx={{
-                  color: '#fff',
-                  mx: 1,
-                  fontWeight: 500,
-                  textTransform: 'uppercase',
-                  transition: 'all 0.3s ease',
-                  '&:hover': {
-                    transform: 'translateY(-2px)',
-                    textShadow: '0 0 10px rgba(255,255,255,0.6)',
-                  },
-                }}
-              >
-                Admin
-              </Button>
-              <Menu
-                anchorEl={anchorEl}
-                open={Boolean(anchorEl)}
-                onClose={() => handleMenuClose()}
-                PaperProps={{
-                  sx: {
-                    mt: 1,
-                    backgroundColor: '#333',
-                    color: 'white',
-                    borderRadius: 1,
-                  },
-                }}
-              >
-                <MenuItem onClick={() => handleMenuClose('/admin')}>Dashboard</MenuItem>
-              </Menu>
-            </>
-          )}
+          {/* User Menu Icon */}
+          <IconButton onClick={handleMenuOpen} sx={{ ml: 2 }}>
+            <Avatar sx={{ width: 32, height: 32 }} />
+          </IconButton>
 
-          {user && (
-            <Typography sx={{ color: '#fff', mx: 2 }}>
-              Welcome, <strong>{fullName}</strong>
-            </Typography>
-          )}
-
-          {!user ? (
-            <Button component={Link} to="/signin" sx={{ color: '#fff', mx: 1 }}>
-              Sign In
-            </Button>
-          ) : (
-            <Button onClick={handleSignOut} sx={{ color: '#fff', mx: 1 }}>
-              Sign Out
-            </Button>
-          )}
+          <Menu
+            anchorEl={anchorEl}
+            open={Boolean(anchorEl)}
+            onClose={() => handleMenuClose()}
+            PaperProps={{
+              sx: {
+                mt: 1,
+                backgroundColor: '#333',
+                color: '#fff',
+                borderRadius: 1,
+              },
+            }}
+          >
+            <MenuItem disabled>👤 {fullName}</MenuItem>
+            {user?.role === 'admin' && (
+              <MenuItem onClick={() => handleMenuClose('/admin')}>Admin Page</MenuItem>
+            )}
+            {!user ? (
+              <MenuItem onClick={() => handleMenuClose('/signin')}>Sign In</MenuItem>
+            ) : (
+              <MenuItem onClick={handleSignOut}>Sign Out</MenuItem>
+            )}
+          </Menu>
         </Box>
       </Toolbar>
 
