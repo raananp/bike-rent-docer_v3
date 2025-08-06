@@ -28,7 +28,7 @@ export default function SignIn() {
     setError('');
     try {
       await login(form.email, form.password);
-      navigate('/admin');
+      navigate('/');
     } catch (err) {
       console.error(err);
       setError('Invalid credentials');

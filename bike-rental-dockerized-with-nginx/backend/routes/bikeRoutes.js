@@ -94,13 +94,37 @@ router.post('/', upload.single('imageFile'), async (req, res) => {
 });
 
 // DELETE a bike
+const { DeleteObjectCommand } = require('@aws-sdk/client-s3');
+
 router.delete('/:id', async (req, res) => {
   try {
     const { id } = req.params;
+    const bike = await Bike.findById(id);
+
+    if (!bike) {
+      return res.status(404).json({ error: 'Bike not found' });
+    }
+
+    // 🧹 Delete image from S3 if it exists
+    if (bike.imageUrl) {
+      try {
+        const url = new URL(bike.imageUrl);
+        const key = decodeURIComponent(url.pathname.substring(1));
+        const deleteParams = {
+          Bucket: process.env.AWS_S3_BUCKET,
+          Key: key,
+        };
+        await s3.send(new DeleteObjectCommand(deleteParams));
+      } catch (s3Err) {
+        console.error('❌ Failed to delete image from S3:', s3Err.message);
+        // Proceed with DB deletion even if S3 deletion fails
+      }
+    }
+
     await Bike.findByIdAndDelete(id);
-    res.json({ message: 'Bike deleted successfully' });
+    res.json({ message: '✅ Bike and image deleted successfully' });
   } catch (err) {
-    console.error('Failed to delete bike:', err);
+    console.error('❌ Failed to delete bike:', err);
     res.status(500).json({ error: 'Failed to delete bike' });
   }
 });
