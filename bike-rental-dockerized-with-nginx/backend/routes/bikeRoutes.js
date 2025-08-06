@@ -72,7 +72,7 @@ router.get('/', async (req, res) => {
 // POST new bike with upload
 router.post('/', upload.single('imageFile'), async (req, res) => {
   try {
-    const { name, modelYear, km, perDay, perWeek, perMonth } = req.body;
+    const { name, modelYear, km, perDay, perWeek, perMonth, type } = req.body; // ✅ include `type`
 
     const newBike = new Bike({
       name,
@@ -81,6 +81,7 @@ router.post('/', upload.single('imageFile'), async (req, res) => {
       perDay,
       perWeek,
       perMonth,
+      type, // ✅ add here
       imageUrl: req.file?.location || '',
     });
 
@@ -89,6 +90,18 @@ router.post('/', upload.single('imageFile'), async (req, res) => {
   } catch (err) {
     console.error('Error uploading bike:', err);
     res.status(500).json({ error: 'Failed to add bike' });
+  }
+});
+
+// DELETE a bike
+router.delete('/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    await Bike.findByIdAndDelete(id);
+    res.json({ message: 'Bike deleted successfully' });
+  } catch (err) {
+    console.error('Failed to delete bike:', err);
+    res.status(500).json({ error: 'Failed to delete bike' });
   }
 });
 

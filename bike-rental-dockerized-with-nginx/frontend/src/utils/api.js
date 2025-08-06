@@ -39,3 +39,7 @@ export const getStats = async () => {
     });
     if (!res.ok) throw new Error('Failed to delete user');
   };
+
+  export const deleteBike = async (id) => {
+    return await fetch(`/api/bikes/${id}`, { method: 'DELETE' });
+  };

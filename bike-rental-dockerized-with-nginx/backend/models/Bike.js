@@ -9,7 +9,12 @@ const bikeSchema = new mongoose.Schema({
   perDay: { type: Number, required: true },
   perWeek: { type: Number, required: true },
   perMonth: { type: Number, required: true },
-  imageUrl: { type: String }, // ✅ New field for storing uploaded image URL
+  imageUrl: { type: String }, // ✅ Field for storing uploaded image URL
+  type: {
+    type: String,
+    enum: ['Speed Bike', 'Cruiser', 'Scooter'],
+    default: 'Speed Bike', // ✅ Default type if not specified
+  },
 });
 
 module.exports = mongoose.model('Bike', bikeSchema);

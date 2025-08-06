@@ -2,18 +2,20 @@ import React, { useEffect, useState } from 'react';
 import {
   Box, Typography, Grid, FormControl, InputLabel, Select,
   MenuItem, TextField, Button, Table, TableHead, TableRow,
-  TableCell, TableBody, Card, CardContent
+  TableCell, TableBody, Card, CardContent, Modal
 } from '@mui/material';
 import { bikeOptions } from '../../utils/constants';
-import { getBikes, addBike } from '../../utils/api';
+import { getBikes, addBike, deleteBike } from '../../utils/api';
 
 function ManageBikeTab() {
   const [bikeForm, setBikeForm] = useState({
-    name: '', modelYear: '', km: '', perDay: '', perWeek: '', perMonth: ''
+    name: '', modelYear: '', km: '', perDay: '', perWeek: '', perMonth: '', type: ''
   });
   const [imageFile, setImageFile] = useState(null);
   const [bikeList, setBikeList] = useState([]);
   const [statusMessage, setStatusMessage] = useState('');
+  const [modalOpen, setModalOpen] = useState(false);
+  const [selectedImage, setSelectedImage] = useState(null);
 
   useEffect(() => {
     fetchBikeList();
@@ -60,12 +62,24 @@ function ManageBikeTab() {
 
     const res = await addBike(formData);
     if (res.ok) {
-      setBikeForm({ name: '', modelYear: '', km: '', perDay: '', perWeek: '', perMonth: '' });
+      setBikeForm({ name: '', modelYear: '', km: '', perDay: '', perWeek: '', perMonth: '', type: '' });
       setImageFile(null);
       fetchBikeList();
       setStatusMessage('✅ Bike added successfully!');
     } else {
       setStatusMessage('❌ Failed to add bike.');
+    }
+  };
+
+  const handleDeleteBike = async (id) => {
+    if (window.confirm('Are you sure you want to delete this bike?')) {
+      const res = await deleteBike(id);
+      if (res.ok) {
+        setStatusMessage('✅ Bike deleted!');
+        fetchBikeList();
+      } else {
+        setStatusMessage('❌ Failed to delete bike.');
+      }
     }
   };
 
@@ -116,6 +130,22 @@ function ManageBikeTab() {
               </FormControl>
             </Grid>
 
+            <Grid item xs={6} sm={4} md={3}>
+              <FormControl fullWidth>
+                <InputLabel sx={{ color: 'white' }}>Bike Type</InputLabel>
+                <Select
+                  value={bikeForm.type}
+                  onChange={(e) => setBikeForm({ ...bikeForm, type: e.target.value })}
+                  label="Bike Type"
+                  sx={whiteTextField}
+                >
+                  <MenuItem value="Speed Bike">Speed Bike</MenuItem>
+                  <MenuItem value="Cruiser">Cruiser</MenuItem>
+                  <MenuItem value="Scooter">Scooter</MenuItem>
+                </Select>
+              </FormControl>
+            </Grid>
+
             {["km", "perDay", "perWeek", "perMonth"].map((field) => (
               <Grid item xs={6} sm={4} md={3} key={field}>
                 <TextField
@@ -158,10 +188,13 @@ function ManageBikeTab() {
               <TableRow>
                 <TableCell sx={{ color: 'white' }}>Name</TableCell>
                 <TableCell sx={{ color: 'white' }}>Model</TableCell>
+                <TableCell sx={{ color: 'white' }}>Type</TableCell>
                 <TableCell sx={{ color: 'white' }}>KM</TableCell>
                 <TableCell sx={{ color: 'white' }}>฿/Day</TableCell>
                 <TableCell sx={{ color: 'white' }}>฿/Week</TableCell>
                 <TableCell sx={{ color: 'white' }}>฿/Month</TableCell>
+                <TableCell sx={{ color: 'white' }}>Image</TableCell>
+                <TableCell sx={{ color: 'white' }}>Delete</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
@@ -169,16 +202,33 @@ function ManageBikeTab() {
                 <TableRow key={b._id}>
                   <TableCell sx={{ color: 'white' }}>{b.name}</TableCell>
                   <TableCell sx={{ color: 'white' }}>{b.modelYear}</TableCell>
+                  <TableCell sx={{ color: 'white' }}>{b.type}</TableCell>
                   <TableCell sx={{ color: 'white' }}>{b.km}</TableCell>
                   <TableCell sx={{ color: 'white' }}>{b.perDay}</TableCell>
                   <TableCell sx={{ color: 'white' }}>{b.perWeek}</TableCell>
                   <TableCell sx={{ color: 'white' }}>{b.perMonth}</TableCell>
+                  <TableCell>
+                    <Button variant="outlined" size="small" onClick={() => { setModalOpen(true); setSelectedImage(b.signedImageUrl); }}>
+                      View
+                    </Button>
+                  </TableCell>
+                  <TableCell>
+                    <Button variant="outlined" size="small" color="error" onClick={() => handleDeleteBike(b._id)}>
+                      Delete
+                    </Button>
+                  </TableCell>
                 </TableRow>
               ))}
             </TableBody>
           </Table>
         </CardContent>
       </Card>
+
+      <Modal open={modalOpen} onClose={() => setModalOpen(false)}>
+        <Box sx={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', bgcolor: '#1a1a1a', p: 2, borderRadius: 2 }}>
+          <img src={selectedImage} alt="Bike" style={{ maxWidth: '400px', maxHeight: '400px' }} />
+        </Box>
+      </Modal>
     </Box>
   );
 }
