@@ -4,7 +4,7 @@ import {
   Drawer, List, ListItem, ListItemText, Avatar
 } from '@mui/material';
 import MenuIcon from '@mui/icons-material/Menu';
-import AccountCircle from '@mui/icons-material/AccountCircle';
+import AccountCircle from '@mui/icons-material/AccountCircle'; // (unused, but kept)
 import { Link, useNavigate } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContext';
 
@@ -77,109 +77,114 @@ const Navbar = () => {
   );
 
   return (
-    <AppBar
-      position="fixed"
-      elevation={0}
-      sx={{
-        backgroundColor: 'transparent',
-        boxShadow: 'none',
-        px: 2,
-        py: 1,
-      }}
-    >
-      <Toolbar sx={{ justifyContent: 'space-between' }}>
-        {/* Mobile Menu */}
-        <IconButton
-          edge="start"
-          color="inherit"
-          aria-label="menu"
-          onClick={handleDrawerToggle}
-          sx={{ display: { sm: 'none' }, color: '#fff' }}
-        >
-          <MenuIcon />
-        </IconButton>
+    <>
+      <AppBar
+        position="fixed"
+        elevation={0}
+        sx={{
+          backgroundColor: 'transparent',
+          boxShadow: 'none',
+          px: 2,
+          py: 1,
+        }}
+      >
+        <Toolbar sx={{ justifyContent: 'space-between' }}>
+          {/* Mobile Menu */}
+          <IconButton
+            edge="start"
+            color="inherit"
+            aria-label="menu"
+            onClick={handleDrawerToggle}
+            sx={{ display: { sm: 'none' }, color: '#fff' }}
+          >
+            <MenuIcon />
+          </IconButton>
 
-        {/* Brand */}
-        <Typography
-          variant="h6"
-          component={Link}
-          to="/"
-          sx={{
-            color: '#fff',
-            textDecoration: 'none',
-            fontWeight: 600,
-            letterSpacing: 1,
-            flexGrow: 1,
-          }}
-        >
-          Pattaya Bike Rental
-        </Typography>
+          {/* Brand */}
+          <Typography
+            variant="h6"
+            component={Link}
+            to="/"
+            sx={{
+              color: '#fff',
+              textDecoration: 'none',
+              fontWeight: 600,
+              letterSpacing: 1,
+              flexGrow: 1,
+            }}
+          >
+            Pattaya Bike Rental
+          </Typography>
 
-        {/* Desktop Links */}
-        <Box sx={{ display: { xs: 'none', sm: 'flex' }, alignItems: 'center' }}>
-          {navItems.map((item) => (
-            <Button
-              key={item}
-              component={Link}
-              to={item === 'Home' ? '/' : `/${item.toLowerCase()}`}
-              sx={{
-                color: '#fff',
-                mx: 1,
-                fontWeight: 500,
-                textTransform: 'uppercase',
-                transition: 'all 0.3s ease',
-                '&:hover': {
-                  transform: 'translateY(-2px)',
-                  textShadow: '0 0 10px rgba(255,255,255,0.6)',
+          {/* Desktop Links */}
+          <Box sx={{ display: { xs: 'none', sm: 'flex' }, alignItems: 'center' }}>
+            {navItems.map((item) => (
+              <Button
+                key={item}
+                component={Link}
+                to={item === 'Home' ? '/' : `/${item.toLowerCase()}`}
+                sx={{
+                  color: '#fff',
+                  mx: 1,
+                  fontWeight: 500,
+                  textTransform: 'uppercase',
+                  transition: 'all 0.3s ease',
+                  '&:hover': {
+                    transform: 'translateY(-2px)',
+                    textShadow: '0 0 10px rgba(255,255,255,0.6)',
+                  },
+                }}
+              >
+                {item}
+              </Button>
+            ))}
+
+            {/* User Menu Icon */}
+            <IconButton onClick={handleMenuOpen} sx={{ ml: 2 }}>
+              <Avatar sx={{ width: 32, height: 32 }} />
+            </IconButton>
+
+            <Menu
+              anchorEl={anchorEl}
+              open={Boolean(anchorEl)}
+              onClose={() => handleMenuClose()}
+              PaperProps={{
+                sx: {
+                  mt: 1,
+                  backgroundColor: '#333',
+                  color: '#fff',
+                  borderRadius: 1,
                 },
               }}
             >
-              {item}
-            </Button>
-          ))}
+              <MenuItem disabled>👤 {fullName}</MenuItem>
+              {user?.role === 'admin' && (
+                <MenuItem onClick={() => handleMenuClose('/admin')}>Admin Page</MenuItem>
+              )}
+              {!user ? (
+                <MenuItem onClick={() => handleMenuClose('/signin')}>Sign In</MenuItem>
+              ) : (
+                <MenuItem onClick={handleSignOut}>Sign Out</MenuItem>
+              )}
+            </Menu>
+          </Box>
+        </Toolbar>
 
-          {/* User Menu Icon */}
-          <IconButton onClick={handleMenuOpen} sx={{ ml: 2 }}>
-            <Avatar sx={{ width: 32, height: 32 }} />
-          </IconButton>
+        {/* Mobile Drawer */}
+        <Drawer
+          anchor="left"
+          open={mobileOpen}
+          onClose={handleDrawerToggle}
+          PaperProps={{ sx: { backgroundColor: '#222', color: '#fff' } }}
+          ModalProps={{ keepMounted: true }}
+        >
+          {drawer}
+        </Drawer>
+      </AppBar>
 
-          <Menu
-            anchorEl={anchorEl}
-            open={Boolean(anchorEl)}
-            onClose={() => handleMenuClose()}
-            PaperProps={{
-              sx: {
-                mt: 1,
-                backgroundColor: '#333',
-                color: '#fff',
-                borderRadius: 1,
-              },
-            }}
-          >
-            <MenuItem disabled>👤 {fullName}</MenuItem>
-            {user?.role === 'admin' && (
-              <MenuItem onClick={() => handleMenuClose('/admin')}>Admin Page</MenuItem>
-            )}
-            {!user ? (
-              <MenuItem onClick={() => handleMenuClose('/signin')}>Sign In</MenuItem>
-            ) : (
-              <MenuItem onClick={handleSignOut}>Sign Out</MenuItem>
-            )}
-          </Menu>
-        </Box>
-      </Toolbar>
-
-      {/* Mobile Drawer */}
-      <Drawer
-        anchor="left"
-        open={mobileOpen}
-        onClose={handleDrawerToggle}
-        PaperProps={{ sx: { backgroundColor: '#222', color: '#fff' } }}
-        ModalProps={{ keepMounted: true }}
-      >
-        {drawer}
-      </Drawer>
-    </AppBar>
+      {/* Spacer to offset the fixed AppBar height */}
+      <Toolbar />
+    </>
   );
 };
 
