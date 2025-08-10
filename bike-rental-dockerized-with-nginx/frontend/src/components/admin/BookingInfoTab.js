@@ -1,55 +1,65 @@
 import React, { useEffect, useState } from 'react';
 import {
   Box, Table, TableHead, TableRow, TableCell, TableBody,
-  TextField, Link, TableSortLabel, IconButton, Tooltip
+  TextField, Link, TableSortLabel, Chip, Stack, IconButton, Tooltip
 } from '@mui/material';
-import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
-import { getBookings, deleteBooking } from '../../utils/api';
+import CheckIcon from '@mui/icons-material/Check';
+import DoNotDisturbAltIcon from '@mui/icons-material/DoNotDisturbAlt';
+import RestartAltIcon from '@mui/icons-material/RestartAlt';
+import { getBookings, updateBookingVerification, deleteBooking } from '../../utils/api';
 
-function BookingInfoTab() {
-  const [bookings, setBookings] = useState([]);
-  const [search, setSearch] = useState('');
+function statusColor(s) {
+  switch ((s || '').toLowerCase()) {
+    case 'passed':  return 'success';
+    case 'failed':  return 'error';
+    case 'skipped': return 'warning';
+    case 'pending':
+    default:        return 'default';
+  }
+}
+
+function deriveOverall(passportStatus, licenseStatus) {
+  const s1 = (passportStatus || '').toLowerCase();
+  const s2 = (licenseStatus  || '').toLowerCase();
+  if (s1 === 'failed' || s2 === 'failed') return 'failed';
+  if (s1 === 'pending' || s2 === 'pending') return 'pending';
+  if (s1 === 'skipped' && s2 === 'skipped') return 'skipped';
+  return 'passed';
+}
+
+export default function BookingInfoTab() {
+  const [bookings, setBookings]   = useState([]);
+  const [search, setSearch]       = useState('');
   const [sortConfig, setSortConfig] = useState({ key: 'createdAt', direction: 'desc' });
-  const [deletingId, setDeletingId] = useState(null);
 
-  useEffect(() => {
-    fetchBookings();
-  }, []);
+  useEffect(() => { fetchBookings(); }, []);
 
   const fetchBookings = async () => {
-    try {
-      const data = await getBookings();
-      setBookings(Array.isArray(data) ? data : []);
-    } catch (e) {
-      console.error('Failed to load bookings', e);
-      setBookings([]);
-    }
+    const data = await getBookings();
+    setBookings(Array.isArray(data) ? data : []);
   };
 
   const handleSort = (key) => {
-    const direction =
-      sortConfig.key === key && sortConfig.direction === 'asc' ? 'desc' : 'asc';
+    const direction = sortConfig.key === key && sortConfig.direction === 'asc' ? 'desc' : 'asc';
     setSortConfig({ key, direction });
   };
 
-  const handleDelete = async (id) => {
-    const yes = window.confirm('Delete this booking? This cannot be undone.');
-    if (!yes) return;
+  const setVerification = async (b, target) => {
+    const payload =
+      target === 'pass'
+        ? { status: 'passed',  license: { status: 'passed'  }, passport: { status: 'passed'  }, message: 'Marked passed by admin' }
+      : target === 'fail'
+        ? { status: 'failed',  license: { status: 'failed'  }, passport: { status: 'failed'  }, message: 'Marked failed by admin' }
+        : { status: 'pending', license: { status: 'pending' }, passport: { status: 'pending' }, message: 'Reset to pending' };
 
-    // Optimistic UI
-    setDeletingId(id);
-    const prev = bookings;
-    setBookings((list) => list.filter((b) => b._id !== id));
-    try {
-      await deleteBooking(id);
-    } catch (e) {
-      // rollback on failure
-      console.error('Delete failed', e);
-      setBookings(prev);
-      alert('Failed to delete booking.');
-    } finally {
-      setDeletingId(null);
-    }
+    await updateBookingVerification(b._id, payload);
+    await fetchBookings();
+  };
+
+  const onDelete = async (id) => {
+    if (!window.confirm('Delete this booking?')) return;
+    await deleteBooking(id);
+    await fetchBookings();
   };
 
   const sortedBookings = [...bookings]
@@ -57,12 +67,21 @@ function BookingInfoTab() {
       `${b.firstName} ${b.lastName} ${b.bike}`.toLowerCase().includes(search.toLowerCase())
     )
     .sort((a, b) => {
-      const va = a[sortConfig.key];
-      const vb = b[sortConfig.key];
-      // Handle dates/strings/numbers simply
-      if (va === vb) return 0;
-      if (sortConfig.direction === 'asc') return va > vb ? 1 : -1;
-      return va < vb ? 1 : -1;
+      const valA = a[sortConfig.key];
+      const valB = b[sortConfig.key];
+      const toComp = (v) => {
+        if (v == null) return '';
+        if (typeof v === 'string') {
+          // try to parse dates in ISO
+          const t = Date.parse(v);
+          return isNaN(t) ? v : t;
+        }
+        if (v instanceof Date) return v.getTime();
+        return v;
+      };
+      const aVal = toComp(valA);
+      const bVal = toComp(valB);
+      return sortConfig.direction === 'asc' ? (aVal > bVal ? 1 : -1) : (aVal < bVal ? 1 : -1);
     });
 
   return (
@@ -78,7 +97,7 @@ function BookingInfoTab() {
           mb: 2,
           '& .MuiInput-underline:before': { borderBottomColor: 'white' },
           '& .MuiInput-underline:hover:before': { borderBottomColor: 'white' },
-          '& .MuiInput-underline:after': { borderBottomColor: 'white' },
+          '& .MuiInput-underline:after': { borderBottomColor: 'white' }
         }}
       />
 
@@ -96,99 +115,100 @@ function BookingInfoTab() {
               </TableSortLabel>
             </TableCell>
             <TableCell sx={{ color: 'white' }}>Bike</TableCell>
-            <TableCell sx={{ color: 'white' }}>
-              <TableSortLabel
-                active={sortConfig.key === 'startDateTime'}
-                direction={sortConfig.direction}
-                onClick={() => handleSort('startDateTime')}
-                sx={{ color: 'white' }}
-              >
-                Start
-              </TableSortLabel>
-            </TableCell>
-            <TableCell sx={{ color: 'white' }}>
-              <TableSortLabel
-                active={sortConfig.key === 'endDateTime'}
-                direction={sortConfig.direction}
-                onClick={() => handleSort('endDateTime')}
-                sx={{ color: 'white' }}
-              >
-                End
-              </TableSortLabel>
-            </TableCell>
+            <TableCell sx={{ color: 'white' }}>Start</TableCell>
+            <TableCell sx={{ color: 'white' }}>End</TableCell>
             <TableCell sx={{ color: 'white' }}>Days</TableCell>
             <TableCell sx={{ color: 'white' }}>Insurance</TableCell>
-            <TableCell sx={{ color: 'white' }}>
-              <TableSortLabel
-                active={sortConfig.key === 'totalPrice'}
-                direction={sortConfig.direction}
-                onClick={() => handleSort('totalPrice')}
-                sx={{ color: 'white' }}
-              >
-                Total (฿)
-              </TableSortLabel>
-            </TableCell>
+            <TableCell sx={{ color: 'white' }}>Total (฿)</TableCell>
             <TableCell sx={{ color: 'white' }}>Passport</TableCell>
             <TableCell sx={{ color: 'white' }}>License</TableCell>
-            <TableCell sx={{ color: 'white' }} align="center">Actions</TableCell>
+            <TableCell sx={{ color: 'white' }}>Passport Status</TableCell>
+            <TableCell sx={{ color: 'white' }}>License Status</TableCell>
+            <TableCell sx={{ color: 'white' }}>Overall</TableCell>
+            <TableCell sx={{ color: 'white' }} align="right">Actions</TableCell>
           </TableRow>
         </TableHead>
 
         <TableBody>
-          {sortedBookings.map((b) => (
-            <TableRow key={b._id} hover>
-              <TableCell sx={{ color: 'white' }}>
-                {b.firstName} {b.lastName}
-              </TableCell>
-              <TableCell sx={{ color: 'white' }}>{b.bike}</TableCell>
-              <TableCell sx={{ color: 'white' }}>
-                {new Date(b.startDateTime).toLocaleString()}
-              </TableCell>
-              <TableCell sx={{ color: 'white' }}>
-                {new Date(b.endDateTime).toLocaleString()}
-              </TableCell>
-              <TableCell sx={{ color: 'white' }}>{b.numberOfDays}</TableCell>
-              <TableCell sx={{ color: 'white' }}>{b.insurance ? 'Yes' : 'No'}</TableCell>
-              <TableCell sx={{ color: 'white' }}>฿{b.totalPrice}</TableCell>
-              <TableCell sx={{ color: 'white' }}>
-                {b.passportSignedUrl ? (
-                  <Link href={b.passportSignedUrl} target="_blank" rel="noopener">
-                    View
-                  </Link>
-                ) : (
-                  'N/A'
-                )}
-              </TableCell>
-              <TableCell sx={{ color: 'white' }}>
-                {b.licenseSignedUrl ? (
-                  <Link href={b.licenseSignedUrl} target="_blank" rel="noopener">
-                    View
-                  </Link>
-                ) : (
-                  'N/A'
-                )}
-              </TableCell>
+          {sortedBookings.map((b) => {
+            // ✅ read from the backend structure
+            const passObj = b.verification?.passport || {};
+            const licObj  = b.verification?.license  || {};
+            let passportStatus = passObj.status;
+            let licenseStatus  = licObj.status;
 
-              <TableCell align="center" sx={{ color: 'white' }}>
-                <Tooltip title="Delete booking">
-                  <span>
-                    <IconButton
-                      size="small"
-                      onClick={() => handleDelete(b._id)}
-                      disabled={deletingId === b._id}
-                      sx={{ color: deletingId === b._id ? 'gray' : '#ff6b6b' }}
-                    >
-                      <DeleteOutlineIcon />
-                    </IconButton>
-                  </span>
-                </Tooltip>
-              </TableCell>
-            </TableRow>
-          ))}
+            // fallback: if no verification yet but file exists, show pending
+            if (!passportStatus) passportStatus = b.passportSignedUrl ? 'pending' : 'skipped';
+            if (!licenseStatus)  licenseStatus  = b.licenseSignedUrl  ? 'pending' : 'skipped';
+
+            const overall = b.verification?.status || deriveOverall(passportStatus, licenseStatus);
+
+            return (
+              <TableRow key={b._id}>
+                <TableCell sx={{ color: 'white' }}>{b.firstName} {b.lastName}</TableCell>
+                <TableCell sx={{ color: 'white' }}>{b.bike}</TableCell>
+                <TableCell sx={{ color: 'white' }}>{new Date(b.startDateTime).toLocaleString()}</TableCell>
+                <TableCell sx={{ color: 'white' }}>{new Date(b.endDateTime).toLocaleString()}</TableCell>
+                <TableCell sx={{ color: 'white' }}>{b.numberOfDays}</TableCell>
+                <TableCell sx={{ color: 'white' }}>{b.insurance ? 'Yes' : 'No'}</TableCell>
+                <TableCell sx={{ color: 'white' }}>฿{b.totalPrice}</TableCell>
+
+                <TableCell sx={{ color: 'white' }}>
+                  {b.passportSignedUrl
+                    ? <Link href={b.passportSignedUrl} target="_blank" rel="noreferrer">View</Link>
+                    : 'N/A'}
+                </TableCell>
+                <TableCell sx={{ color: 'white' }}>
+                  {b.licenseSignedUrl
+                    ? <Link href={b.licenseSignedUrl} target="_blank" rel="noreferrer">View</Link>
+                    : 'N/A'}
+                </TableCell>
+
+                <TableCell sx={{ color: 'white' }}>
+                  <Tooltip title={passObj.reason || '—'}>
+                    <Chip size="small" label={passportStatus} color={statusColor(passportStatus)} />
+                  </Tooltip>
+                </TableCell>
+                <TableCell sx={{ color: 'white' }}>
+                  <Tooltip title={licObj.reason || '—'}>
+                    <Chip size="small" label={licenseStatus} color={statusColor(licenseStatus)} />
+                  </Tooltip>
+                </TableCell>
+                <TableCell sx={{ color: 'white' }}>
+                  <Tooltip title={b.verification?.updatedAt ? new Date(b.verification.updatedAt).toLocaleString() : ''}>
+                    <Chip size="small" label={overall} color={statusColor(overall)} />
+                  </Tooltip>
+                </TableCell>
+
+                <TableCell align="right" sx={{ color: 'white' }}>
+                  <Stack direction="row" spacing={1} justifyContent="flex-end">
+                    <Tooltip title="Mark Passed">
+                      <IconButton size="small" onClick={() => setVerification(b, 'pass')}>
+                        <CheckIcon sx={{ color: '#4caf50' }} />
+                      </IconButton>
+                    </Tooltip>
+                    <Tooltip title="Mark Failed">
+                      <IconButton size="small" onClick={() => setVerification(b, 'fail')}>
+                        <DoNotDisturbAltIcon sx={{ color: '#f44336' }} />
+                      </IconButton>
+                    </Tooltip>
+                    <Tooltip title="Reset to Pending">
+                      <IconButton size="small" onClick={() => setVerification(b, 'reset')}>
+                        <RestartAltIcon sx={{ color: '#ff9800' }} />
+                      </IconButton>
+                    </Tooltip>
+                    <Tooltip title="Delete booking">
+                      <IconButton size="small" onClick={() => onDelete(b._id)}>
+                        <DoNotDisturbAltIcon sx={{ color: '#999' }} />
+                      </IconButton>
+                    </Tooltip>
+                  </Stack>
+                </TableCell>
+              </TableRow>
+            );
+          })}
         </TableBody>
       </Table>
     </Box>
   );
 }
-
-export default BookingInfoTab;

@@ -302,3 +302,24 @@
   font-size: 12px;
   margin-top: 8px;
 }
+
+/* badges */
+.badge {
+  display: inline-block;
+  padding: 4px 8px;
+  border-radius: 999px;
+  font-size: 12px;
+  line-height: 1;
+  margin-right: 8px;
+  margin-bottom: 6px;
+  border: 1px solid transparent;
+}
+.badge-default { background: #2a2a2a; color: #ddd; }
+.badge-success { background: #1b5e20; color: #c8f7c5; }
+.badge-error   { background: #5d1b1b; color: #ffd1d1; }
+.badge-warn    { background: #5e4a1b; color: #ffe9b3; }
+.badge-outline { background: transparent; border-color: #444; }
+
+.verification-status { margin-top: 10px; }
+.ver-row-title { font-weight: 600; margin-bottom: 4px; }
+.ver-badges { display: flex; flex-wrap: wrap; }

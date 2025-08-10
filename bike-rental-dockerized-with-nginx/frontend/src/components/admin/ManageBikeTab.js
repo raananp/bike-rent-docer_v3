@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import {
   Box, Typography, Grid, FormControl, InputLabel, Select,
   MenuItem, TextField, Button, Table, TableHead, TableRow,
-  TableCell, TableBody, Card, CardContent, Modal
+  TableCell, TableBody, Card, CardContent, Modal, CircularProgress
 } from '@mui/material';
 import { bikeOptions } from '../../utils/constants';
 import { getBikes, addBike, deleteBike } from '../../utils/api';
@@ -14,72 +14,110 @@ function ManageBikeTab() {
   const [imageFile, setImageFile] = useState(null);
   const [bikeList, setBikeList] = useState([]);
   const [statusMessage, setStatusMessage] = useState('');
+  const [errorMessage, setErrorMessage] = useState('');
   const [modalOpen, setModalOpen] = useState(false);
   const [selectedImage, setSelectedImage] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
-    fetchBikeList();
+    refreshBikes();
   }, []);
 
-  const fetchBikeList = async () => {
-    const data = await getBikes();
-    setBikeList(data);
-  };
+  async function refreshBikes() {
+    try {
+      setLoading(true);
+      setErrorMessage('');
+      const data = await getBikes();
+      setBikeList(Array.isArray(data) ? data : []);
+    } catch (e) {
+      console.error(e);
+      setErrorMessage(e.message || 'Failed to load bikes');
+    } finally {
+      setLoading(false);
+    }
+  }
 
   const handleBrandChange = (e) => {
     const name = e.target.value;
-    setBikeForm({ ...bikeForm, name, modelYear: '' });
+    setBikeForm({ ...bikeForm, name, modelYear: '' }); // reset model when brand changes
   };
 
   const handleImageChange = (e) => {
-    const file = e.target.files[0];
+    const file = e.target.files?.[0];
     if (!file) return;
-    const allowedTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
-    const maxSizeMB = 10;
 
-    if (!allowedTypes.includes(file.type)) {
+    const allowed = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+    const maxMB = 10;
+
+    if (!allowed.includes(file.type)) {
       setStatusMessage('❌ Image must be jpg, png, gif, or webp.');
       return;
     }
-
-    if (file.size > maxSizeMB * 1024 * 1024) {
+    if (file.size > maxMB * 1024 * 1024) {
       setStatusMessage('❌ Image must be smaller than 10MB.');
       return;
     }
-
     setImageFile(file);
     setStatusMessage('');
   };
 
   const handleAddBike = async () => {
-    const formData = new FormData();
-    for (const key in bikeForm) {
-      formData.append(key, bikeForm[key]);
-    }
-    if (imageFile) {
-      formData.append('imageFile', imageFile);
+    // basic validation
+    const required = ['name', 'modelYear', 'type', 'km', 'perDay', 'perWeek', 'perMonth'];
+    for (const k of required) {
+      if (!String(bikeForm[k]).trim()) {
+        setStatusMessage(`❌ Please fill the "${k}" field.`);
+        return;
+      }
     }
 
-    const res = await addBike(formData);
-    if (res.ok) {
+    try {
+      setSubmitting(true);
+      setStatusMessage('');
+      setErrorMessage('');
+
+      const formData = new FormData();
+      Object.entries(bikeForm).forEach(([k, v]) => formData.append(k, v));
+      if (imageFile) formData.append('imageFile', imageFile);
+
+      // addBike throws on error; returns parsed JSON on success
+      await addBike(formData);
+
       setBikeForm({ name: '', modelYear: '', km: '', perDay: '', perWeek: '', perMonth: '', type: '' });
       setImageFile(null);
-      fetchBikeList();
       setStatusMessage('✅ Bike added successfully!');
-    } else {
-      setStatusMessage('❌ Failed to add bike.');
+      await refreshBikes();
+    } catch (e) {
+      console.error(e);
+      setErrorMessage(e.message || 'Failed to add bike.');
+    } finally {
+      setSubmitting(false);
     }
   };
 
   const handleDeleteBike = async (id) => {
-    if (window.confirm('Are you sure you want to delete this bike?')) {
-      const res = await deleteBike(id);
-      if (res.ok) {
-        setStatusMessage('✅ Bike deleted!');
-        fetchBikeList();
+    if (!window.confirm('Are you sure you want to delete this bike?')) return;
+
+    try {
+      setSubmitting(true);
+      setStatusMessage('');
+      setErrorMessage('');
+      await deleteBike(id); // throws on non-2xx
+      // optimistic UI
+      setBikeList((prev) => prev.filter((b) => b._id !== id));
+      setStatusMessage('✅ Bike deleted!');
+    } catch (e) {
+      console.warn(e);
+      // If backend says 404, it’s already gone — remove from UI anyway
+      if (String(e.message).includes('404')) {
+        setBikeList((prev) => prev.filter((b) => b._id !== id));
+        setStatusMessage('ℹ️ Bike was already deleted. List updated.');
       } else {
-        setStatusMessage('❌ Failed to delete bike.');
+        setErrorMessage(e.message || 'Failed to delete bike.');
       }
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -96,9 +134,12 @@ function ManageBikeTab() {
       <Card sx={{ backgroundColor: '#1e1e1e', mb: 4 }}>
         <CardContent>
           <Typography variant="h6" sx={{ color: 'white', mb: 2 }}>Add New Bike</Typography>
+
           {statusMessage && <Typography sx={{ color: 'lightgreen', mb: 2 }}>{statusMessage}</Typography>}
+          {errorMessage && <Typography sx={{ color: '#ff8080', mb: 2 }}>{errorMessage}</Typography>}
+
           <Grid container spacing={2}>
-            <Grid item xs={6} sm={4} md={3}>
+            <Grid item xs={12} sm={6} md={3}>
               <FormControl fullWidth>
                 <InputLabel sx={{ color: 'white' }}>Brand</InputLabel>
                 <Select
@@ -114,7 +155,7 @@ function ManageBikeTab() {
               </FormControl>
             </Grid>
 
-            <Grid item xs={6} sm={4} md={3}>
+            <Grid item xs={12} sm={6} md={3}>
               <FormControl fullWidth>
                 <InputLabel sx={{ color: 'white' }}>Model</InputLabel>
                 <Select
@@ -130,7 +171,7 @@ function ManageBikeTab() {
               </FormControl>
             </Grid>
 
-            <Grid item xs={6} sm={4} md={3}>
+            <Grid item xs={12} sm={6} md={3}>
               <FormControl fullWidth>
                 <InputLabel sx={{ color: 'white' }}>Bike Type</InputLabel>
                 <Select
@@ -146,8 +187,8 @@ function ManageBikeTab() {
               </FormControl>
             </Grid>
 
-            {["km", "perDay", "perWeek", "perMonth"].map((field) => (
-              <Grid item xs={6} sm={4} md={3} key={field}>
+            {['km', 'perDay', 'perWeek', 'perMonth'].map((field) => (
+              <Grid item xs={12} sm={6} md={3} key={field}>
                 <TextField
                   fullWidth
                   variant="outlined"
@@ -155,12 +196,20 @@ function ManageBikeTab() {
                   value={bikeForm[field]}
                   onChange={(e) => setBikeForm({ ...bikeForm, [field]: e.target.value })}
                   sx={whiteTextField}
+                  type="number"
+                  inputProps={{ min: 0 }}
                 />
               </Grid>
             ))}
 
             <Grid item xs={12} sm={6} md={4}>
-              <Button variant="outlined" component="label" fullWidth sx={{ color: 'white', borderColor: 'white' }}>
+              <Button
+                variant="outlined"
+                component="label"
+                fullWidth
+                sx={{ color: 'white', borderColor: 'white' }}
+                disabled={submitting}
+              >
                 Upload Image
                 <input hidden accept="image/*" type="file" onChange={handleImageChange} />
               </Button>
@@ -172,8 +221,8 @@ function ManageBikeTab() {
             </Grid>
 
             <Grid item xs={12}>
-              <Button variant="contained" onClick={handleAddBike} sx={{ mt: 2 }}>
-                Add Bike
+              <Button variant="contained" onClick={handleAddBike} sx={{ mt: 2 }} disabled={submitting}>
+                {submitting ? <CircularProgress size={20} sx={{ color: 'white' }} /> : 'Add Bike'}
               </Button>
             </Grid>
           </Grid>
@@ -183,50 +232,87 @@ function ManageBikeTab() {
       <Card sx={{ backgroundColor: '#1e1e1e' }}>
         <CardContent>
           <Typography variant="h6" sx={{ color: 'white', mb: 2 }}>Bike List</Typography>
-          <Table>
-            <TableHead>
-              <TableRow>
-                <TableCell sx={{ color: 'white' }}>Name</TableCell>
-                <TableCell sx={{ color: 'white' }}>Model</TableCell>
-                <TableCell sx={{ color: 'white' }}>Type</TableCell>
-                <TableCell sx={{ color: 'white' }}>KM</TableCell>
-                <TableCell sx={{ color: 'white' }}>฿/Day</TableCell>
-                <TableCell sx={{ color: 'white' }}>฿/Week</TableCell>
-                <TableCell sx={{ color: 'white' }}>฿/Month</TableCell>
-                <TableCell sx={{ color: 'white' }}>Image</TableCell>
-                <TableCell sx={{ color: 'white' }}>Delete</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {bikeList.map((b) => (
-                <TableRow key={b._id}>
-                  <TableCell sx={{ color: 'white' }}>{b.name}</TableCell>
-                  <TableCell sx={{ color: 'white' }}>{b.modelYear}</TableCell>
-                  <TableCell sx={{ color: 'white' }}>{b.type}</TableCell>
-                  <TableCell sx={{ color: 'white' }}>{b.km}</TableCell>
-                  <TableCell sx={{ color: 'white' }}>{b.perDay}</TableCell>
-                  <TableCell sx={{ color: 'white' }}>{b.perWeek}</TableCell>
-                  <TableCell sx={{ color: 'white' }}>{b.perMonth}</TableCell>
-                  <TableCell>
-                    <Button variant="outlined" size="small" onClick={() => { setModalOpen(true); setSelectedImage(b.signedImageUrl); }}>
-                      View
-                    </Button>
-                  </TableCell>
-                  <TableCell>
-                    <Button variant="outlined" size="small" color="error" onClick={() => handleDeleteBike(b._id)}>
-                      Delete
-                    </Button>
-                  </TableCell>
+
+          {loading ? (
+            <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
+              <CircularProgress />
+            </Box>
+          ) : (
+            <Table>
+              <TableHead>
+                <TableRow>
+                  <TableCell sx={{ color: 'white' }}>Name</TableCell>
+                  <TableCell sx={{ color: 'white' }}>Model</TableCell>
+                  <TableCell sx={{ color: 'white' }}>Type</TableCell>
+                  <TableCell sx={{ color: 'white' }}>KM</TableCell>
+                  <TableCell sx={{ color: 'white' }}>฿/Day</TableCell>
+                  <TableCell sx={{ color: 'white' }}>฿/Week</TableCell>
+                  <TableCell sx={{ color: 'white' }}>฿/Month</TableCell>
+                  <TableCell sx={{ color: 'white' }}>Image</TableCell>
+                  <TableCell sx={{ color: 'white' }}>Delete</TableCell>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+              </TableHead>
+              <TableBody>
+                {bikeList.map((b) => {
+                  const img = b.signedImageUrl || b.imageUrl || '';
+                  return (
+                    <TableRow key={b._id}>
+                      <TableCell sx={{ color: 'white' }}>{b.name}</TableCell>
+                      <TableCell sx={{ color: 'white' }}>{b.modelYear}</TableCell>
+                      <TableCell sx={{ color: 'white' }}>{b.type}</TableCell>
+                      <TableCell sx={{ color: 'white' }}>{b.km}</TableCell>
+                      <TableCell sx={{ color: 'white' }}>{b.perDay}</TableCell>
+                      <TableCell sx={{ color: 'white' }}>{b.perWeek}</TableCell>
+                      <TableCell sx={{ color: 'white' }}>{b.perMonth}</TableCell>
+                      <TableCell>
+                        {img ? (
+                          <Button
+                            variant="outlined"
+                            size="small"
+                            onClick={() => {
+                              setSelectedImage(img);
+                              setModalOpen(true);
+                            }}
+                          >
+                            View
+                          </Button>
+                        ) : (
+                          <Typography variant="caption" sx={{ color: '#bbb' }}>N/A</Typography>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        <Button
+                          variant="outlined"
+                          size="small"
+                          color="error"
+                          onClick={() => handleDeleteBike(b._id)}
+                          disabled={submitting}
+                        >
+                          Delete
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          )}
         </CardContent>
       </Card>
 
       <Modal open={modalOpen} onClose={() => setModalOpen(false)}>
-        <Box sx={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', bgcolor: '#1a1a1a', p: 2, borderRadius: 2 }}>
-          <img src={selectedImage} alt="Bike" style={{ maxWidth: '400px', maxHeight: '400px' }} />
+        <Box
+          sx={{
+            position: 'absolute', top: '50%', left: '50%',
+            transform: 'translate(-50%, -50%)', bgcolor: '#1a1a1a',
+            p: 2, borderRadius: 2, maxWidth: 600
+          }}
+        >
+          {selectedImage ? (
+            <img src={selectedImage} alt="Bike" style={{ maxWidth: '100%', maxHeight: 500, borderRadius: 8 }} />
+          ) : (
+            <Typography sx={{ color: 'white' }}>No image</Typography>
+          )}
         </Box>
       </Modal>
     </Box>

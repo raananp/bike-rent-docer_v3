@@ -26,6 +26,9 @@ export default function BikeModal({ open, onClose, bike, bookings, fetchBookings
   const [statusMessage, setStatusMessage] = useState('');
   const [pricePreview, setPricePreview] = useState({ base: 0, surcharge: 0, insurance: 0, total: 0 });
 
+  // ✅ PDPA consent state
+  const [consent, setConsent] = useState(false);
+
   const licenseInputRef = useRef(null);
   const passportInputRef = useRef(null);
 
@@ -138,6 +141,12 @@ export default function BikeModal({ open, onClose, bike, bookings, fetchBookings
         return;
       }
 
+      // Validate PDPA consent
+      if (!consent) {
+        setStatusMessage('Please provide consent to proceed.');
+        return;
+      }
+
       // Validate date availability
       if (shouldDisableDate(new Date(form.startDateTime))) {
         setStatusMessage('Selected start date is unavailable for this bike.');
@@ -160,6 +169,11 @@ export default function BikeModal({ open, onClose, bike, bookings, fetchBookings
         insurance: form.insurance,
         provideDocsInOffice: form.provideDocsInOffice,
         totalPrice: pricePreview.total,
+
+        // ✅ Consent fields expected by backend
+        consentGiven: true,
+        consentTextVersion: 'v1',
+        dataRetentionDays: 90,
       }).forEach(([k, v]) => body.append(k, v));
 
       // 🔁 use backend's expected field names
@@ -383,6 +397,28 @@ export default function BikeModal({ open, onClose, bike, bookings, fetchBookings
                     <Typography variant="caption" sx={{ color: 'gray', display:'block', mt:1 }}>
                       Per Day: ฿{bike.perDay}  •  Per Week: ฿{bike.perWeek}  •  Per Month: ฿{bike.perMonth}
                     </Typography>
+                  </Box>
+                </Grid>
+              </Grid>
+
+              {/* 🔒 PDPA consent */}
+              <Grid container sx={{ mt: 2 }}>
+                <Grid item xs={12}>
+                  <Box sx={{ p: 2, borderRadius: 2, backgroundColor: '#181818', border: '1px solid #2a2a2a' }}>
+                    <Typography variant="subtitle1" sx={{ mb: 1 }}>Privacy & Consent (PDPA)</Typography>
+                    <Typography variant="body2" sx={{ color: 'gray', mb: 1 }}>
+                      We collect and process your license/passport solely for rental verification and insurance purposes.
+                      Files are stored securely and deleted within 90 days after rental completion.
+                    </Typography>
+                    <label style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                      <input
+                        type="checkbox"
+                        checked={consent}
+                        onChange={(e) => setConsent(e.target.checked)}
+                        required
+                      />
+                      <span>I consent to the collection and processing of my documents for this booking.</span>
+                    </label>
                   </Box>
                 </Grid>
               </Grid>

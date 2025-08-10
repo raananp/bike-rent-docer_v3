@@ -38,6 +38,17 @@ function computePrice(days, insurance, rates) {
   return { base, insurance: insuranceCost, total };
 }
 
+// --- verification helpers (UI-only) ---
+function statusClass(s) {
+  switch ((s || '').toLowerCase()) {
+    case 'passed':  return 'badge badge-success';
+    case 'failed':  return 'badge badge-error';
+    case 'skipped': return 'badge badge-warn';
+    case 'pending':
+    default:        return 'badge badge-default';
+  }
+}
+
 export default function Booking() {
   const [bookings, setBookings] = useState([]);
   const [bikesData, setBikesData] = useState([]);
@@ -88,6 +99,22 @@ export default function Booking() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Auto-refresh while any booking is pending verification
+  useEffect(() => {
+    const anyPending = bookings.some(
+      (b) =>
+        (b?.verification?.status || '').toLowerCase() === 'pending' ||
+        (b?.verification?.license?.status || '').toLowerCase() === 'pending' ||
+        (b?.verification?.passport?.status || '').toLowerCase() === 'pending'
+    );
+    if (!anyPending) return;
+
+    const id = setInterval(() => {
+      fetchBookings().catch(() => {});
+    }, 8000); // poll every ~8s
+    return () => clearInterval(id);
+  }, [bookings]);
+
   const formatDateTime = (isoString) => {
     if (!isoString) return '';
     const date = new Date(isoString);
@@ -115,7 +142,6 @@ export default function Booking() {
       const days = Number(b.numberOfDays || 0);
 
       const computed = computePrice(days, !!b.insurance, rates || { perDay: 0, perWeek: 0, perMonth: 0 });
-
       const total = Number(b.totalPrice || 0) > 0 ? Number(b.totalPrice) : computed.total;
 
       return {
@@ -148,83 +174,124 @@ export default function Booking() {
             </div>
           ) : (
             <ul className="cart-items">
-              {bookingsWithTotals.map((b) => (
-                <li key={b._id} className="cart-item">
-                  <div className="item-thumb">
-                    {b.bikeImageUrl ? (
-                      <img src={b.bikeImageUrl} alt={b.bike} />
-                    ) : (
-                      <div className="thumb-placeholder">Bike</div>
-                    )}
-                  </div>
+              {bookingsWithTotals.map((b) => {
+                // --- derive verification status for display ---
+                const licStatus  = b?.verification?.license?.status  ?? (b.licenseSignedUrl  ? 'pending' : 'skipped');
+                const licReason  = b?.verification?.license?.reason  ?? '';
+                const passStatus = b?.verification?.passport?.status ?? (b.passportSignedUrl ? 'pending' : 'skipped');
+                const passReason = b?.verification?.passport?.reason ?? '';
+                const overall    = b?.verification?.status || (
+                  (licStatus === 'failed' || passStatus === 'failed') ? 'failed'
+                  : (licStatus === 'pending' || passStatus === 'pending') ? 'pending'
+                  : (licStatus === 'skipped' && passStatus === 'skipped') ? 'skipped'
+                  : 'passed'
+                );
 
-                  <div className="item-main">
-                    <div className="item-header">
-                      <h2 className="item-name">{b.bike}</h2>
-                      <div className="item-price">฿{Number(b.__finalTotal || 0).toLocaleString()}</div>
-                    </div>
+                // prefer signed URL for bike image
+                const imgSrc = b.bikeImageSignedUrl || b.bikeImageUrl || '';
 
-                    <div className="item-meta">
-                      <div className="meta-row">
-                        <span className="meta-label">Renter</span>
-                        <span className="meta-value">{b.firstName} {b.lastName}</span>
-                      </div>
-                      <div className="meta-row">
-                        <span className="meta-label">Dates</span>
-                        <span className="meta-value">
-                          {formatDateTime(b.startDateTime)} → {formatDateTime(b.endDateTime)}
-                        </span>
-                      </div>
-                      <div className="meta-row">
-                        <span className="meta-label">Duration</span>
-                        <span className="meta-value">
-                          {b.numberOfDays} day{Number(b.numberOfDays) > 1 ? 's' : ''}
-                        </span>
-                      </div>
-                      <div className="meta-row">
-                        <span className="meta-label">Insurance</span>
-                        <span className="meta-value">{b.insurance ? 'Upgraded' : 'Standard'}</span>
-                      </div>
-
-                      {(b.perDay || b.perWeek || b.perMonth || bikeRateMap.get(b.bike || '')) && (
-                        <div className="meta-row meta-rate">
-                          <span className="meta-label">Rate Card</span>
-                          <span className="meta-value">
-                            {(() => {
-                              const r = (b.perDay || b.perWeek || b.perMonth)
-                                ? { perDay: b.perDay, perWeek: b.perWeek, perMonth: b.perMonth }
-                                : (bikeRateMap.get(b.bike || '') || {});
-                              const parts = [];
-                              if (r.perDay) parts.push(`฿${r.perDay}/day`);
-                              if (r.perWeek) parts.push(`฿${r.perWeek}/week`);
-                              if (r.perMonth) parts.push(`฿${r.perMonth}/month`);
-                              return parts.join(' • ');
-                            })()}
-                          </span>
-                        </div>
+                return (
+                  <li key={b._id} className="cart-item">
+                    <div className="item-thumb">
+                      {imgSrc ? (
+                        <img
+                          src={imgSrc}
+                          alt={b.bike}
+                          onError={(e) => {
+                            // If the presigned URL expired, fetch again to refresh it
+                            if (e?.target) e.target.onerror = null;
+                            fetchBookings();
+                          }}
+                        />
+                      ) : (
+                        <div className="thumb-placeholder">Bike</div>
                       )}
                     </div>
 
-                    {/* Files */}
-                    <div className="item-files">
-                      <div className="file-pill">
-                        {b.licenseSignedUrl ? (
-                          <a href={b.licenseSignedUrl} target="_blank" rel="noopener noreferrer">License</a>
-                        ) : (
-                          <span className="muted">License: N/A</span>
+                    <div className="item-main">
+                      <div className="item-header">
+                        <h2 className="item-name">{b.bike}</h2>
+                        <div className="item-price">฿{Number(b.__finalTotal || 0).toLocaleString()}</div>
+                      </div>
+
+                      <div className="item-meta">
+                        <div className="meta-row">
+                          <span className="meta-label">Renter</span>
+                          <span className="meta-value">{b.firstName} {b.lastName}</span>
+                        </div>
+                        <div className="meta-row">
+                          <span className="meta-label">Dates</span>
+                          <span className="meta-value">
+                            {formatDateTime(b.startDateTime)} → {formatDateTime(b.endDateTime)}
+                          </span>
+                        </div>
+                        <div className="meta-row">
+                          <span className="meta-label">Duration</span>
+                          <span className="meta-value">
+                            {b.numberOfDays} day{Number(b.numberOfDays) > 1 ? 's' : ''}
+                          </span>
+                        </div>
+                        <div className="meta-row">
+                          <span className="meta-label">Insurance</span>
+                          <span className="meta-value">{b.insurance ? 'Upgraded' : 'Standard'}</span>
+                        </div>
+
+                        {(b.perDay || b.perWeek || b.perMonth || bikeRateMap.get(b.bike || '')) && (
+                          <div className="meta-row meta-rate">
+                            <span className="meta-label">Rate Card</span>
+                            <span className="meta-value">
+                              {(() => {
+                                const r = (b.perDay || b.perWeek || b.perMonth)
+                                  ? { perDay: b.perDay, perWeek: b.perWeek, perMonth: b.perMonth }
+                                  : (bikeRateMap.get(b.bike || '') || {});
+                                const parts = [];
+                                if (r.perDay) parts.push(`฿${r.perDay}/day`);
+                                if (r.perWeek) parts.push(`฿${r.perWeek}/week`);
+                                if (r.perMonth) parts.push(`฿${r.perMonth}/month`);
+                                return parts.join(' • ');
+                              })()}
+                            </span>
+                          </div>
                         )}
                       </div>
-                      <div className="file-pill">
-                        {b.passportSignedUrl ? (
-                          <a href={b.passportSignedUrl} target="_blank" rel="noopener noreferrer">Passport</a>
-                        ) : (
-                          <span className="muted">Passport: N/A</span>
-                        )}
+
+                      {/* Files */}
+                      <div className="item-files">
+                        <div className="file-pill">
+                          {b.licenseSignedUrl ? (
+                            <a href={b.licenseSignedUrl} target="_blank" rel="noopener noreferrer">License</a>
+                          ) : (
+                            <span className="muted">License: N/A</span>
+                          )}
+                        </div>
+                        <div className="file-pill">
+                          {b.passportSignedUrl ? (
+                            <a href={b.passportSignedUrl} target="_blank" rel="noopener noreferrer">Passport</a>
+                          ) : (
+                            <span className="muted">Passport: N/A</span>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Verification badges */}
+                      <div className="verification-status">
+                        <div className="ver-row-title">🪪 Document Verification</div>
+                        <div className="ver-badges">
+                          <span className={statusClass(passStatus)} title={passReason || ''}>
+                            Passport: {passStatus}
+                          </span>
+                          <span className={statusClass(licStatus)} title={licReason || ''}>
+                            License: {licStatus}
+                          </span>
+                          <span className={`${statusClass(overall)} badge-outline`}>
+                            Overall: {overall}
+                          </span>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                </li>
-              ))}
+                  </li>
+                );
+              })}
             </ul>
           )}
 

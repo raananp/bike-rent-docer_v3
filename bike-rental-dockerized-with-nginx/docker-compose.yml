@@ -13,7 +13,8 @@ services:
     environment:
       - PORT=5000
       - MONGO_URI=mongodb://mongo:27017/bikeRental
-      - JWT_SECRET=A^%JHS&*^JHS%^$^GSFHSjhjjn^*&?>             # ✅ REQUIRED for auth
+      - JWT_SECRET=A^%JHS&*^JHS%^$^GSFHSjhjjn^*&?>   
+      - AUTO_VERIFY_DOCS=textract          # ✅ REQUIRED for auth
       # If you use S3 uploads, also set these (or remove if not used):
     depends_on:
       - mongo

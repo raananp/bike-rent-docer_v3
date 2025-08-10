@@ -1,5 +1,3 @@
-// /frontend/src/utils/api.js
-
 // --- helpers ---
 function authHeaders() {
   const token = localStorage.getItem('token');
@@ -15,8 +13,7 @@ async function toJsonOrThrow(res) {
   try {
     return text ? JSON.parse(text) : null;
   } catch {
-    // not JSON, return raw text
-    return text;
+    return text; // not JSON
   }
 }
 
@@ -64,7 +61,6 @@ export const getBookings = async () => {
   return toJsonOrThrow(res);
 };
 
-// (optional) only the signed-in user's bookings
 export const getMyBookings = async () => {
   const res = await fetch('/api/bookings/mine', {
     headers: { ...authHeaders() },
@@ -72,11 +68,23 @@ export const getMyBookings = async () => {
   return toJsonOrThrow(res);
 };
 
-// ✅ NEW: delete a booking by id (requires auth; owner or admin per backend)
 export const deleteBooking = async (id) => {
   const res = await fetch(`/api/bookings/${id}`, {
     method: 'DELETE',
     headers: { ...authHeaders() },
+  });
+  return toJsonOrThrow(res);
+};
+
+// ✅ NEW: update verification
+export const updateBookingVerification = async (id, payload) => {
+  const res = await fetch(`/api/bookings/${id}/verification`, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+      ...authHeaders(),
+    },
+    body: JSON.stringify(payload),
   });
   return toJsonOrThrow(res);
 };
@@ -90,10 +98,9 @@ export const getBikes = async () => {
 };
 
 export const addBike = async (formData) => {
-  // FormData: do NOT set Content-Type manually
   const res = await fetch('/api/bikes', {
     method: 'POST',
-    headers: { ...authHeaders() },
+    headers: { ...authHeaders() }, // do NOT set content-type for FormData
     body: formData,
   });
   return toJsonOrThrow(res);
