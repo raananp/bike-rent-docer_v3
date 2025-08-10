@@ -1,64 +1,92 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import './Booking.css';
 
-export default function Booking() {
-  const [form, setForm] = useState({
-    firstName: '',
-    lastName: '',
-    startDateTime: '',
-    numberOfDays: '',
-    bike: '',
-    insurance: false,
-    provideDocsInOffice: false,
-  });
+// Safe fetch helper that won't crash on HTML error pages
+async function safeJsonFetch(url, options = {}) {
+  const res = await fetch(url, options);
+  const ct = res.headers.get('content-type') || '';
+  const text = await res.text(); // read once
+  if (!res.ok) {
+    const snippet = text.slice(0, 300);
+    throw new Error(`HTTP ${res.status}: ${snippet}`);
+  }
+  return ct.includes('application/json') ? JSON.parse(text) : text;
+}
 
-  const [licenseFile, setLicenseFile] = useState(null);
-  const [passportFile, setPassportFile] = useState(null);
+// Price helper: compute base + insurance from rates and days
+function computePrice(days, insurance, rates) {
+  if (!days || !rates) return { base: 0, insurance: 0, total: 0 };
+  let remaining = days;
+  let base = 0;
+
+  const monthRate = Number(rates.perMonth || 0);
+  const weekRate  = Number(rates.perWeek  || 0);
+  const dayRate   = Number(rates.perDay   || 0);
+
+  const months = Math.floor(remaining / 30);
+  base += months * monthRate;
+  remaining -= months * 30;
+
+  const weeks = Math.floor(remaining / 7);
+  base += weeks * weekRate;
+  remaining -= weeks * 7;
+
+  base += remaining * dayRate;
+
+  const insuranceCost = insurance ? days * 50 : 0; // your rule
+  const total = base + insuranceCost;
+  return { base, insurance: insuranceCost, total };
+}
+
+export default function Booking() {
   const [bookings, setBookings] = useState([]);
   const [bikesData, setBikesData] = useState([]);
   const [statusMessage, setStatusMessage] = useState('');
-  const [showFiles, setShowFiles] = useState({});
-  const [pricePreview, setPricePreview] = useState({ base: 0, insurance: 0, surcharge: 0, total: 0 });
+  const [delivery, setDelivery] = useState('pickup'); // pickup | bangkok | nationwide
 
+  // Dummy delivery table (฿)
+  const deliveryPrices = { pickup: 0, bangkok: 800, nationwide: 1500 };
+
+  // Map for quick bike rate lookup: "Name Year" -> {perDay, perWeek, perMonth}
+  const bikeRateMap = useMemo(() => {
+    const m = new Map();
+    (bikesData || []).forEach((b) => {
+      const key = `${b.name || ''} ${b.modelYear || ''}`.trim();
+      m.set(key, { perDay: b.perDay, perWeek: b.perWeek, perMonth: b.perMonth });
+    });
+    return m;
+  }, [bikesData]);
+
+  // Load ONLY current user’s bookings
   const fetchBookings = async () => {
-    const res = await fetch('/api/bookings');
-    const data = await res.json();
-    setBookings(data);
+    try {
+      const token = localStorage.getItem('token');
+      const data = await safeJsonFetch('/api/bookings/mine', {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      setBookings(Array.isArray(data) ? data : []);
+    } catch (err) {
+      console.error('Failed to load my bookings:', err);
+      setStatusMessage('❌ Could not load your bookings. Please try again.');
+      setBookings([]);
+    }
   };
 
   const fetchBikes = async () => {
     try {
-      const res = await fetch('/api/bikes');
-      const data = await res.json();
-      setBikesData(data);
+      const data = await safeJsonFetch('/api/bikes');
+      setBikesData(Array.isArray(data) ? data : []);
     } catch (err) {
       console.error('Failed to load bikes', err);
+      setBikesData([]);
     }
   };
 
-  const calculatePrice = (days, insurance, bikeName) => {
-    const selectedBike = bikesData.find(b => `${b.name} ${b.modelYear}` === bikeName);
-    if (!selectedBike || !days) return { base: 0, surcharge: 0, insurance: 0, total: 0 };
-
-    let base = 0;
-    let remaining = days;
-
-    const months = Math.floor(remaining / 30);
-    base += months * selectedBike.perMonth;
-    remaining -= months * 30;
-
-    const weeks = Math.floor(remaining / 7);
-    base += weeks * selectedBike.perWeek;
-    remaining -= weeks * 7;
-
-    base += remaining * selectedBike.perDay;
-
-    const surcharge = days * 50;
-    const insuranceCost = insurance ? days * 50 : 0;
-    const total = base + surcharge + insuranceCost;
-
-    return { base, surcharge, insurance: insuranceCost, total };
-  };
+  useEffect(() => {
+    fetchBookings();
+    fetchBikes();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const formatDateTime = (isoString) => {
     if (!isoString) return '';
@@ -72,196 +100,244 @@ export default function Booking() {
     });
   };
 
-  const toggleViewFiles = (id) => {
-    setShowFiles((prev) => ({ ...prev, [id]: !prev[id] }));
-  };
+  // Ensure each booking has a computedTotal in case backend totalPrice is 0/missing
+  const bookingsWithTotals = useMemo(() => {
+    return bookings.map((b) => {
+      // Prefer rates already enriched onto the booking
+      const ratesFromBooking = (b.perDay || b.perWeek || b.perMonth)
+        ? { perDay: b.perDay, perWeek: b.perWeek, perMonth: b.perMonth }
+        : null;
 
-  useEffect(() => {
-    fetchBookings();
-    fetchBikes();
-  }, []);
+      // Fallback: lookup from bikes list by "Name Year"
+      const ratesFromMap = bikeRateMap.get(b.bike || '') || null;
 
-  useEffect(() => {
-    const days = parseInt(form.numberOfDays);
-    const price = calculatePrice(days, form.insurance, form.bike);
-    setPricePreview(price);
-  }, [form.numberOfDays, form.bike, form.insurance, bikesData]);
+      const rates = ratesFromBooking || ratesFromMap;
+      const days = Number(b.numberOfDays || 0);
 
-  const handleFileChange = (e, type) => {
-    const file = e.target.files[0];
-    if (!file) return;
+      const computed = computePrice(days, !!b.insurance, rates || { perDay: 0, perWeek: 0, perMonth: 0 });
 
-    const allowedTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
-    const maxSizeMB = 10;
+      const total = Number(b.totalPrice || 0) > 0 ? Number(b.totalPrice) : computed.total;
 
-    if (!allowedTypes.includes(file.type)) {
-      setStatusMessage(`❌ ${type === 'license' ? 'License' : 'Passport'} must be an image file (jpg, png, gif, webp).`);
-      return;
-    }
+      return {
+        ...b,
+        __computed: computed,
+        __finalTotal: total,
+      };
+    });
+  }, [bookings, bikeRateMap]);
 
-    if (file.size > maxSizeMB * 1024 * 1024) {
-      setStatusMessage(`❌ ${type === 'license' ? 'License' : 'Passport'} must be smaller than ${maxSizeMB}MB.`);
-      return;
-    }
+  // Cart totals
+  const subtotal = useMemo(() => {
+    return bookingsWithTotals.reduce((acc, b) => acc + (Number(b.__finalTotal) || 0), 0);
+  }, [bookingsWithTotals]);
 
-    if (type === 'license') {
-      setLicenseFile(file);
-    } else {
-      setPassportFile(file);
-    }
-
-    setStatusMessage('');
-  };
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-
-    if (!form.provideDocsInOffice && !licenseFile) {
-      setStatusMessage('❌ Please upload your license or select office option.');
-      return;
-    }
-    if (!form.provideDocsInOffice && !passportFile) {
-      setStatusMessage('❌ Please upload your passport or select office option.');
-      return;
-    }
-
-    const formData = new FormData();
-    for (const key in form) {
-      formData.append(key, form[key]);
-    }
-
-    if (licenseFile) formData.append('licenseFile', licenseFile);
-    if (passportFile) formData.append('passportFile', passportFile);
-
-    try {
-      const res = await fetch('/api/bookings', {
-        method: 'POST',
-        body: formData,
-      });
-
-      const result = await res.json();
-      if (res.ok) {
-        setStatusMessage('✅ Booking created successfully!');
-        fetchBookings();
-        setForm({
-          firstName: '',
-          lastName: '',
-          startDateTime: '',
-          numberOfDays: '',
-          bike: '',
-          insurance: false,
-          provideDocsInOffice: false,
-        });
-        setLicenseFile(null);
-        setPassportFile(null);
-      } else {
-        setStatusMessage(`❌ Error: ${result.error}`);
-      }
-    } catch (err) {
-      console.error(err);
-      setStatusMessage('❌ Error submitting form.');
-    }
-  };
+  const deliveryFee = deliveryPrices[delivery] ?? 0;
+  const grandTotal = subtotal + deliveryFee;
 
   return (
-    <div className="booking-page">
-      <div className="booking-form-container">
-        <h2>Create Booking</h2>
-        {statusMessage && <p className="status-message">{statusMessage}</p>}
-        <form onSubmit={handleSubmit} className="booking-form">
-          <div className="name-fields">
-            <input type="text" placeholder="First Name" value={form.firstName} onChange={(e) => setForm({ ...form, firstName: e.target.value })} required />
-            <input type="text" placeholder="Last Name" value={form.lastName} onChange={(e) => setForm({ ...form, lastName: e.target.value })} required />
-          </div>
-          <input type="datetime-local" value={form.startDateTime} onChange={(e) => setForm({ ...form, startDateTime: e.target.value })} required />
-          <input type="number" placeholder="Number of Days" value={form.numberOfDays} onChange={(e) => setForm({ ...form, numberOfDays: e.target.value })} required min={1} />
-          <select value={form.bike} onChange={(e) => setForm({ ...form, bike: e.target.value })} required>
-            <option value="">Select Bike</option>
-            {bikesData.map((b) => (
-              <option key={b._id} value={`${b.name} ${b.modelYear}`}>{`${b.name} ${b.modelYear}`}</option>
-            ))}
-          </select>
-          <label className="checkbox">
-            <input type="checkbox" checked={form.insurance} onChange={(e) => setForm({ ...form, insurance: e.target.checked })} />
-            Upgrade Insurance
-          </label>
-          <label className="checkbox">
-            <input type="checkbox" checked={form.provideDocsInOffice} onChange={(e) => setForm({ ...form, provideDocsInOffice: e.target.checked })} />
-            I’ll provide documents in office
-          </label>
-          <div className="file-uploads">
-            <label className="upload-label">
-              <span>Upload License{licenseFile && <span className="checkmark"> ✅</span>}</span>
-              <input type="file" accept="image/*" style={{ display: 'none' }} onChange={(e) => handleFileChange(e, 'license')} required={!form.provideDocsInOffice} />
-            </label>
-            <label className="upload-label">
-              <span>Upload Passport{passportFile && <span className="checkmark"> ✅</span>}</span>
-              <input type="file" accept="image/*" style={{ display: 'none' }} onChange={(e) => handleFileChange(e, 'passport')} required={!form.provideDocsInOffice} />
-            </label>
-          </div>
+    <div className="cart-page">
+      <div className="cart-container">
+        <div className="cart-left">
+          <h1 className="cart-title">Your Rentals</h1>
+          {statusMessage && <p className="status-message">{statusMessage}</p>}
 
-          <div className="price-preview">
-            <p><strong>Base Price:</strong> ฿{pricePreview.base.toLocaleString()}</p>
-            <p><strong>Surcharge (฿50/day):</strong> ฿{pricePreview.surcharge.toLocaleString()}</p>
-            {form.insurance && <p><strong>Insurance (฿50/day):</strong> ฿{pricePreview.insurance.toLocaleString()}</p>}
-            <p><strong>Total Price:</strong> ฿{pricePreview.total.toLocaleString()}</p>
-          </div>
-
-          <button type="submit">Book</button>
-        </form>
-      </div>
-
-      <div className="booking-cards-container">
-        <h3>All Bookings</h3>
-        <div className="cards-wrapper">
-          {bookings.map((b) => {
-            const breakdown = calculatePrice(parseInt(b.numberOfDays), b.insurance, b.bike);
-            return (
-              <div key={b._id} className="booking-card">
-                {b.bikeImageUrl && (
-                  <img
-                    src={b.bikeImageUrl}
-                    alt={b.bike}
-                    style={{
-                      width: '100%',
-                      maxHeight: '180px',
-                      objectFit: 'cover',
-                      borderRadius: '10px',
-                    }}
-                  />
-                )}
-                <p><strong>Name:</strong> {b.firstName} {b.lastName}</p>
-                <p><strong>Start Date:</strong> {formatDateTime(b.startDateTime)}</p>
-                <p><strong>End Date:</strong> {formatDateTime(b.endDateTime)}</p>
-                <p><strong>Days:</strong> {b.numberOfDays}</p>
-                <p><strong>Bike:</strong> {b.bike}</p>
-                <p><strong>Insurance:</strong> {b.insurance ? 'Yes' : 'No'}</p>
-                <p><strong>Total Price:</strong> ฿{b.totalPrice?.toLocaleString()}</p>
-
-                <div className="price-breakdown">
-                  <p style={{ fontWeight: 600, marginTop: '0.5rem' }}>💰 Price Breakdown:</p>
-                  <p>- Base Price: ฿{breakdown.base.toLocaleString()}</p>
-                  <p>- Surcharge (฿50/day): ฿{breakdown.surcharge.toLocaleString()}</p>
-                  {b.insurance && <p>- Insurance (฿50/day): ฿{breakdown.insurance.toLocaleString()}</p>}
-                  <p>= <strong>Total: ฿{breakdown.total.toLocaleString()}</strong></p>
-                </div>
-
-                <button onClick={() => toggleViewFiles(b._id)}>View Files</button>
-                {showFiles[b._id] && (
-                  <div className="file-links">
-                    {b.licenseSignedUrl ? (
-                      <p><strong>License:</strong> <a href={b.licenseSignedUrl} target="_blank" rel="noopener noreferrer">View License</a></p>
-                    ) : <p>No license uploaded.</p>}
-
-                    {b.passportSignedUrl ? (
-                      <p><strong>Passport:</strong> <a href={b.passportSignedUrl} target="_blank" rel="noopener noreferrer">View Passport</a></p>
-                    ) : <p>No passport uploaded.</p>}
+          {bookingsWithTotals.length === 0 ? (
+            <div className="cart-empty">
+              <p>Your cart is empty.</p>
+              <a className="link-btn" href="/bikes">Browse bikes</a>
+            </div>
+          ) : (
+            <ul className="cart-items">
+              {bookingsWithTotals.map((b) => (
+                <li key={b._id} className="cart-item">
+                  <div className="item-thumb">
+                    {b.bikeImageUrl ? (
+                      <img src={b.bikeImageUrl} alt={b.bike} />
+                    ) : (
+                      <div className="thumb-placeholder">Bike</div>
+                    )}
                   </div>
-                )}
+
+                  <div className="item-main">
+                    <div className="item-header">
+                      <h2 className="item-name">{b.bike}</h2>
+                      <div className="item-price">฿{Number(b.__finalTotal || 0).toLocaleString()}</div>
+                    </div>
+
+                    <div className="item-meta">
+                      <div className="meta-row">
+                        <span className="meta-label">Renter</span>
+                        <span className="meta-value">{b.firstName} {b.lastName}</span>
+                      </div>
+                      <div className="meta-row">
+                        <span className="meta-label">Dates</span>
+                        <span className="meta-value">
+                          {formatDateTime(b.startDateTime)} → {formatDateTime(b.endDateTime)}
+                        </span>
+                      </div>
+                      <div className="meta-row">
+                        <span className="meta-label">Duration</span>
+                        <span className="meta-value">
+                          {b.numberOfDays} day{Number(b.numberOfDays) > 1 ? 's' : ''}
+                        </span>
+                      </div>
+                      <div className="meta-row">
+                        <span className="meta-label">Insurance</span>
+                        <span className="meta-value">{b.insurance ? 'Upgraded' : 'Standard'}</span>
+                      </div>
+
+                      {(b.perDay || b.perWeek || b.perMonth || bikeRateMap.get(b.bike || '')) && (
+                        <div className="meta-row meta-rate">
+                          <span className="meta-label">Rate Card</span>
+                          <span className="meta-value">
+                            {(() => {
+                              const r = (b.perDay || b.perWeek || b.perMonth)
+                                ? { perDay: b.perDay, perWeek: b.perWeek, perMonth: b.perMonth }
+                                : (bikeRateMap.get(b.bike || '') || {});
+                              const parts = [];
+                              if (r.perDay) parts.push(`฿${r.perDay}/day`);
+                              if (r.perWeek) parts.push(`฿${r.perWeek}/week`);
+                              if (r.perMonth) parts.push(`฿${r.perMonth}/month`);
+                              return parts.join(' • ');
+                            })()}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Files */}
+                    <div className="item-files">
+                      <div className="file-pill">
+                        {b.licenseSignedUrl ? (
+                          <a href={b.licenseSignedUrl} target="_blank" rel="noopener noreferrer">License</a>
+                        ) : (
+                          <span className="muted">License: N/A</span>
+                        )}
+                      </div>
+                      <div className="file-pill">
+                        {b.passportSignedUrl ? (
+                          <a href={b.passportSignedUrl} target="_blank" rel="noopener noreferrer">Passport</a>
+                        ) : (
+                          <span className="muted">Passport: N/A</span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+
+          {/* Info sections like Apple cart */}
+          <div className="info-panels">
+            <div className="info-card">
+              <h3>Insurance Options</h3>
+              <p className="muted">
+                Standard coverage is included. Upgrade adds accidental damage protection up to ฿50,000
+                with a ฿3,000 excess. Roadside assistance in Pattaya included.
+              </p>
+              <ul className="bullets">
+                <li>Standard: included</li>
+                <li>Upgrade: +฿50/day per rental (already reflected if chosen)</li>
+                <li>Third‑party liability included</li>
+              </ul>
+            </div>
+
+            <div className="info-card">
+              <h3>Delivery Across Thailand</h3>
+              <p className="muted">Choose how you’d like to receive your bike(s):</p>
+              <div className="delivery-options">
+                <label className={`delivery-option ${delivery === 'pickup' ? 'active' : ''}`}>
+                  <input
+                    type="radio"
+                    name="delivery"
+                    value="pickup"
+                    checked={delivery === 'pickup'}
+                    onChange={() => setDelivery('pickup')}
+                  />
+                  <div>
+                    <div className="option-title">Pattaya pickup</div>
+                    <div className="option-sub">Free — collect at our office</div>
+                  </div>
+                  <div className="option-price">฿0</div>
+                </label>
+
+                <label className={`delivery-option ${delivery === 'bangkok' ? 'active' : ''}`}>
+                  <input
+                    type="radio"
+                    name="delivery"
+                    value="bangkok"
+                    checked={delivery === 'bangkok'}
+                    onChange={() => setDelivery('bangkok')}
+                  />
+                  <div>
+                    <div className="option-title">Bangkok delivery</div>
+                    <div className="option-sub">Same/next day, 10:00–18:00</div>
+                  </div>
+                  <div className="option-price">฿800</div>
+                </label>
+
+                <label className={`delivery-option ${delivery === 'nationwide' ? 'active' : ''}`}>
+                  <input
+                    type="radio"
+                    name="delivery"
+                    value="nationwide"
+                    checked={delivery === 'nationwide'}
+                    onChange={() => setDelivery('nationwide')}
+                  />
+                  <div>
+                    <div className="option-title">Nationwide courier</div>
+                    <div className="option-sub">1–3 days, insured transit</div>
+                  </div>
+                  <div className="option-price">฿1,500</div>
+                </label>
               </div>
-            );
-          })}
+            </div>
+          </div>
         </div>
+
+        {/* Order summary */}
+        <aside className="cart-right">
+          <div className="summary-card">
+            <h2>Order Summary</h2>
+
+            <div className="summary-row">
+              <span>Subtotal</span>
+              <span>฿{subtotal.toLocaleString()}</span>
+            </div>
+
+            <div className="summary-row">
+              <span>Delivery</span>
+              <span>฿{deliveryFee.toLocaleString()}</span>
+            </div>
+
+            <div className="summary-divider" />
+
+            <div className="summary-row total">
+              <span>Total</span>
+              <span>฿{grandTotal.toLocaleString()}</span>
+            </div>
+
+            <button
+              className="primary-btn"
+              onClick={() => alert('Checkout flow placeholder — integrate payment/confirmation next.')}
+              disabled={bookingsWithTotals.length === 0}
+            >
+              Continue
+            </button>
+
+            <p className="fine-print">
+              By continuing, you agree to our rental terms and insurance conditions.
+            </p>
+          </div>
+
+          <div className="side-card">
+            <h4>Need changes?</h4>
+            <p className="muted">
+              To add another bike or change dates, go to the <a href="/bikes">Bikes</a> page and start a new booking.
+            </p>
+          </div>
+        </aside>
       </div>
     </div>
   );

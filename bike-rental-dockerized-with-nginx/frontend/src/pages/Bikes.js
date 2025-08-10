@@ -12,6 +12,18 @@ const bikeTypes = [
   { label: 'Scooter', icon: <ElectricMopedIcon /> },
 ];
 
+// Safe fetch helper that won't crash on HTML error pages (e.g., nginx 502)
+async function safeJsonFetch(url, options = {}) {
+  const res = await fetch(url, options);
+  const ct = res.headers.get('content-type') || '';
+  const text = await res.text(); // read once
+  if (!res.ok) {
+    const snippet = text.slice(0, 300);
+    throw new Error(`HTTP ${res.status}: ${snippet}`);
+  }
+  return ct.includes('application/json') ? JSON.parse(text) : text;
+}
+
 export default function Bikes() {
   const [bikes, setBikes] = useState([]);
   const [bookings, setBookings] = useState([]);
@@ -26,16 +38,27 @@ export default function Bikes() {
   }, []);
 
   const fetchBikes = async () => {
-    const res = await fetch('/api/bikes');
-    const data = await res.json();
-    setBikes(data);
-    setFilteredBikes(data);
+    try {
+      const data = await safeJsonFetch('/api/bikes');
+      setBikes(data);
+      setFilteredBikes(data);
+    } catch (err) {
+      console.error('Failed to load /api/bikes:', err.message);
+      setBikes([]);
+      setFilteredBikes([]);
+    }
   };
 
+  // For availability we still pull all bookings (public) as your backend returns.
+  // If you later lock this down, switch to a public availability endpoint.
   const fetchBookings = async () => {
-    const res = await fetch('/api/bookings');
-    const data = await res.json();
-    setBookings(data);
+    try {
+      const data = await safeJsonFetch('/api/bookings');
+      setBookings(Array.isArray(data) ? data : []);
+    } catch (err) {
+      console.error('Failed to load /api/bookings:', err.message);
+      setBookings([]);
+    }
   };
 
   const handleCardClick = (bike) => {
@@ -45,23 +68,37 @@ export default function Bikes() {
 
   const handleFilter = (type) => {
     setSelectedType(type);
-    setFilteredBikes(type ? bikes.filter(b => b.type === type) : bikes);
+    setFilteredBikes(type ? bikes.filter((b) => b.type === type) : bikes);
   };
 
   return (
     <Box padding="2rem">
-      <Typography variant="h4" sx={{ color: 'white', mb: 1 }}>Explore Our Bikes</Typography>
-      <Typography variant="body1" sx={{ color: 'gray', mb: 4 }}>All our bikes are ready for adventure.</Typography>
+      <Typography variant="h4" sx={{ color: 'white', mb: 1 }}>
+        Explore Our Bikes
+      </Typography>
+      <Typography variant="body1" sx={{ color: 'gray', mb: 4 }}>
+        All our bikes are ready for adventure.
+      </Typography>
 
       <Stack direction="row" spacing={3} justifyContent="center" sx={{ mb: 4 }}>
         {bikeTypes.map(({ label, icon }) => (
-          <IconButton key={label} onClick={() => handleFilter(label)} sx={{
-            borderRadius: '50%', backgroundColor: selectedType === label ? '#90caf9' : '#333',
-            color: 'white', width: 70, height: 70, '&:hover': { backgroundColor: '#555' },
-          }}>
+          <IconButton
+            key={label}
+            onClick={() => handleFilter(label)}
+            sx={{
+              borderRadius: '50%',
+              backgroundColor: selectedType === label ? '#90caf9' : '#333',
+              color: 'white',
+              width: 70,
+              height: 70,
+              '&:hover': { backgroundColor: '#555' },
+            }}
+          >
             <Box display="flex" flexDirection="column" alignItems="center">
               {icon}
-              <Typography variant="caption" sx={{ mt: 0.5, fontSize: '0.65rem' }}>{label}</Typography>
+              <Typography variant="caption" sx={{ mt: 0.5, fontSize: '0.65rem' }}>
+                {label}
+              </Typography>
             </Box>
           </IconButton>
         ))}

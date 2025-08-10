@@ -1,50 +1,69 @@
 const express = require('express');
 const router = express.Router();
 const Bike = require('../models/Bike');
+
 const multer = require('multer');
 const multerS3 = require('multer-s3');
-const { S3Client, GetObjectCommand } = require('@aws-sdk/client-s3');
+const { S3Client, GetObjectCommand, DeleteObjectCommand } = require('@aws-sdk/client-s3');
 const { getSignedUrl } = require('@aws-sdk/s3-request-presigner');
 const { v4: uuidv4 } = require('uuid');
+
 require('dotenv').config();
 
-// S3 client setup
+/* ------------------------- AWS S3 CLIENT ------------------------- */
 const s3 = new S3Client({
   region: process.env.AWS_REGION,
   credentials: {
-    accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+    accessKeyId:     process.env.AWS_ACCESS_KEY_ID,
     secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
   },
 });
 
-// Multer S3 config
+/* ---------------------- MULTER (S3 STORAGE) ---------------------- */
 const upload = multer({
   storage: multerS3({
     s3,
     bucket: process.env.AWS_S3_BUCKET,
-    acl: 'private', // leave as private, we’ll sign the URL later
+    acl: 'private', // keep private; we sign URLs below
     contentType: multerS3.AUTO_CONTENT_TYPE,
     key: (req, file, cb) => {
-      const ext = file.originalname.split('.').pop();
-      const filename = `${req.body.name}-${req.body.modelYear}-${uuidv4()}.${ext}`;
+      const orig = file.originalname || 'file';
+      const ext  = (orig.includes('.') ? orig.split('.').pop() : '').toLowerCase();
+      // safe-ish base name
+      const baseName =
+        `${(req.body.name || 'bike')}-${(req.body.modelYear || 'unknown')}`.replace(/[^\w.-]+/g, '-');
+      const filename = `${baseName}-${uuidv4()}${ext ? '.' + ext : ''}`;
       cb(null, filename);
     },
   }),
 });
 
-// 🚀 GET all bikes with signed image URLs
-router.get('/', async (req, res) => {
+/* ---------------------- HELPER: EXTRACT S3 KEY ------------------- */
+function extractS3Key(imageUrlOrKey = '') {
+  if (!imageUrlOrKey) return '';
   try {
-    const bikes = await Bike.find();
+    // If it's a full https://s3.amazonaws.com/bucket/key or https://bucket.s3.*.amazonaws.com/key
+    const u = new URL(imageUrlOrKey);
+    // pathname starts with "/"
+    const key = decodeURIComponent(u.pathname.replace(/^\/+/, ''));
+    return key;
+  } catch {
+    // Not a URL; assume it’s already a key
+    return imageUrlOrKey;
+  }
+}
+
+/* -------------------- GET /api/bikes (list) ---------------------- */
+router.get('/', async (_req, res) => {
+  try {
+    const bikes = await Bike.find().sort({ createdAt: -1 });
 
     const signedBikes = await Promise.all(
       bikes.map(async (bike) => {
         let signedUrl = '';
-        if (bike.imageUrl) {
+        const key = extractS3Key(bike.imageUrl);
+        if (key) {
           try {
-            const url = new URL(bike.imageUrl);
-            const key = decodeURIComponent(url.pathname.substring(1)); // FIX HERE
-
             const command = new GetObjectCommand({
               Bucket: process.env.AWS_S3_BUCKET,
               Key: key,
@@ -54,11 +73,7 @@ router.get('/', async (req, res) => {
             console.error(`Error signing URL for bike ${bike._id}:`, err.message);
           }
         }
-
-        return {
-          ...bike.toObject(),
-          signedImageUrl: signedUrl,
-        };
+        return { ...bike.toObject(), signedImageUrl: signedUrl };
       })
     );
 
@@ -69,20 +84,55 @@ router.get('/', async (req, res) => {
   }
 });
 
-// POST new bike with upload
+/* ----------------- GET /api/bikes/:id (single) ------------------- */
+router.get('/:id', async (req, res) => {
+  try {
+    const bike = await Bike.findById(req.params.id);
+    if (!bike) return res.status(404).json({ error: 'Not found' });
+
+    let signedImageUrl = '';
+    const key = extractS3Key(bike.imageUrl);
+    if (key) {
+      try {
+        const command = new GetObjectCommand({
+          Bucket: process.env.AWS_S3_BUCKET,
+          Key: key,
+        });
+        signedImageUrl = await getSignedUrl(s3, command, { expiresIn: 3600 });
+      } catch (err) {
+        console.error(`Error signing URL for bike ${bike._id}:`, err.message);
+      }
+    }
+
+    res.json({ ...bike.toObject(), signedImageUrl });
+  } catch (err) {
+    console.error('GET /api/bikes/:id failed:', err);
+    res.status(500).json({ error: 'Failed to fetch bike' });
+  }
+});
+
+/* -------------- POST /api/bikes (create + upload) ---------------- */
 router.post('/', upload.single('imageFile'), async (req, res) => {
   try {
-    const { name, modelYear, km, perDay, perWeek, perMonth, type } = req.body; // ✅ include `type`
-
-    const newBike = new Bike({
+    const {
       name,
       modelYear,
       km,
       perDay,
       perWeek,
       perMonth,
-      type, // ✅ add here
-      imageUrl: req.file?.location || '',
+      type,
+    } = req.body;
+
+    const newBike = new Bike({
+      name,
+      modelYear: Number(modelYear),
+      km: Number(km),
+      perDay: Number(perDay),
+      perWeek: Number(perWeek),
+      perMonth: Number(perMonth),
+      type,
+      imageUrl: req.file?.location || req.file?.key || '', // location if full URL; key fallback
     });
 
     await newBike.save();
@@ -93,38 +143,31 @@ router.post('/', upload.single('imageFile'), async (req, res) => {
   }
 });
 
-// DELETE a bike
-const { DeleteObjectCommand } = require('@aws-sdk/client-s3');
-
+/* ------------------- DELETE /api/bikes/:id ----------------------- */
 router.delete('/:id', async (req, res) => {
   try {
     const { id } = req.params;
     const bike = await Bike.findById(id);
+    if (!bike) return res.status(404).json({ error: 'Bike not found' });
 
-    if (!bike) {
-      return res.status(404).json({ error: 'Bike not found' });
-    }
-
-    // 🧹 Delete image from S3 if it exists
-    if (bike.imageUrl) {
+    // Attempt to delete image from S3 if present
+    const key = extractS3Key(bike.imageUrl);
+    if (key) {
       try {
-        const url = new URL(bike.imageUrl);
-        const key = decodeURIComponent(url.pathname.substring(1));
-        const deleteParams = {
+        await s3.send(new DeleteObjectCommand({
           Bucket: process.env.AWS_S3_BUCKET,
           Key: key,
-        };
-        await s3.send(new DeleteObjectCommand(deleteParams));
+        }));
       } catch (s3Err) {
-        console.error('❌ Failed to delete image from S3:', s3Err.message);
-        // Proceed with DB deletion even if S3 deletion fails
+        console.error('Failed to delete image from S3:', s3Err.message);
+        // continue even if S3 deletion fails
       }
     }
 
     await Bike.findByIdAndDelete(id);
-    res.json({ message: '✅ Bike and image deleted successfully' });
+    res.json({ message: 'Bike and image deleted successfully' });
   } catch (err) {
-    console.error('❌ Failed to delete bike:', err);
+    console.error('Failed to delete bike:', err);
     res.status(500).json({ error: 'Failed to delete bike' });
   }
 });

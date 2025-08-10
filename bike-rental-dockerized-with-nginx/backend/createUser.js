@@ -7,7 +7,9 @@ mongoose.connect(process.env.MONGO_URI, {
   useUnifiedTopology: true,
 }).then(async () => {
   const newUser = new User({
-    email: 'rananp@gmail.com',
+    firstName: 'raanan',
+    lastName: 'peretz',
+    email: 'rananpAdmin@gmail.com',
     password: '1234', // plain text, will be hashed automatically
     role: 'admin'
   });

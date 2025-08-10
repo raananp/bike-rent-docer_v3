@@ -162,11 +162,23 @@ export default function BikeModal({ open, onClose, bike, bookings, fetchBookings
         totalPrice: pricePreview.total,
       }).forEach(([k, v]) => body.append(k, v));
 
-      if (licenseFile) body.append('license', licenseFile);
-      if (passportFile) body.append('passport', passportFile);
+      // 🔁 use backend's expected field names
+      if (licenseFile) body.append('licenseFile', licenseFile);
+      if (passportFile) body.append('passportFile', passportFile);
 
-      const res = await fetch('/api/bookings', { method: 'POST', body });
-      if (!res.ok) throw new Error('Booking failed');
+      // 🔐 send JWT so backend can attach userId/userEmail
+      const token = localStorage.getItem('token');
+      const res = await fetch('/api/bookings', {
+        method: 'POST',
+        headers: token ? { Authorization: `Bearer ${token}` } : undefined, // don't set Content-Type for FormData
+        body,
+      });
+
+      if (!res.ok) {
+        const txt = await res.text().catch(() => '');
+        throw new Error(txt || `HTTP ${res.status}`);
+      }
+
       setStatusMessage('');
       if (typeof fetchBookings === 'function') await fetchBookings();
       onClose && onClose();

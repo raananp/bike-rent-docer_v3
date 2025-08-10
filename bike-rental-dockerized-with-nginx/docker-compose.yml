@@ -1,34 +1,45 @@
-version: '3'
+version: "3.9"
+
 services:
   mongo:
-    image: mongo
-    restart: always
+    image: mongo:8.0
+    restart: unless-stopped
     volumes:
       - mongo-data:/data/db
 
   backend:
     build: ./backend
-    ports:
-      - "5000:5000"
+    restart: unless-stopped
     environment:
+      - PORT=5000
       - MONGO_URI=mongodb://mongo:27017/bikeRental
+      - JWT_SECRET=A^%JHS&*^JHS%^$^GSFHSjhjjn^*&?>             # ✅ REQUIRED for auth
+      # If you use S3 uploads, also set these (or remove if not used):
     depends_on:
       - mongo
+    # (optional for debugging; nginx proxies internally anyway)
+    # ports:
+    #   - "5000:5000"
 
   frontend:
     build: ./frontend
-    ports:
-      - "3000:3000"
+    restart: unless-stopped
     depends_on:
       - backend
+    # (optional for debugging)
+    # ports:
+    #   - "3000:3000"
 
   nginx:
     build: ./nginx
+    restart: unless-stopped
     ports:
       - "80:80"
     depends_on:
       - frontend
       - backend
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf:ro
 
 volumes:
   mongo-data:

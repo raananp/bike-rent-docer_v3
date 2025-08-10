@@ -9,7 +9,7 @@ COPY package*.json ./
 RUN npm install
 RUN npm install @mui/icons-material@5.11.0
 #RUN npm install axios jwt-decode@3.1.2 react-swipeable-views
-RUN npm install axios jwt-decode@3.1.2 react-swipeable-views @mui/x-date-pickers@^6.19.7 date-fns@^2 --legacy-peer-deps
+RUN npm install axios jwt-decode@3.1.2 react-swipeable-views @mui/x-date-pickers@^6.19.7 date-fns@^2 eslint-plugin-react-hooks@^4.6.0 --legacy-peer-deps
 
 
 # Copy rest of the app

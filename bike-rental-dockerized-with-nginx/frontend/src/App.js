@@ -18,20 +18,32 @@ function AppRoutes() {
   const location = useLocation();
   const { loading } = useContext(AuthContext);
 
-  if (loading) return null; // ⏳ Optionally return a spinner here
+  if (loading) return null; // optionally show a spinner here
 
   return (
     <AnimatePresence mode="wait" initial={false}>
       <Routes location={location} key={location.pathname}>
         <Route path="/" element={<Home />} />
         <Route path="/bikes" element={<Bikes />} />
-        <Route path="/booking" element={<Booking />} />
+
+        {/* 🔒 Booking requires any logged-in user */}
+        <Route
+          path="/booking"
+          element={
+            <ProtectedRoute>
+              <Booking />
+            </ProtectedRoute>
+          }
+        />
+
         <Route path="/signup" element={<SignUp />} />
         <Route path="/signin" element={<SignIn />} />
+
+        {/* 🔒 Admin requires role=admin */}
         <Route
           path="/admin"
           element={
-            <ProtectedRoute>
+            <ProtectedRoute requiredRole="admin">
               <Admin />
             </ProtectedRoute>
           }
@@ -41,7 +53,7 @@ function AppRoutes() {
   );
 }
 
-function App() {
+export default function App() {
   return (
     <AuthProvider>
       <Navbar />
@@ -49,5 +61,3 @@ function App() {
     </AuthProvider>
   );
 }
-
-export default App;
