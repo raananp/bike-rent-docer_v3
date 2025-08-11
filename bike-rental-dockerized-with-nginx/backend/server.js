@@ -8,6 +8,8 @@ const bookingsRoute = require('./routes/bookings');
 const adminRoutes   = require('./routes/admin');
 const bikeRoutes    = require('./routes/bikeRoutes');
 const authRoutes    = require('./routes/auth');
+const statsRouter = require('./routes/stats');
+
 
 const app = express();
 
@@ -26,6 +28,7 @@ app.use('/api/bookings', bookingsRoute);
 app.use('/api/admin',    adminRoutes);
 app.use('/api/bikes',    bikeRoutes);
 app.use('/api/auth',     authRoutes);
+app.use('/api/stats', statsRouter);
 
 /** 404 for unknown /api paths (prevents HTML being parsed as JSON on the client) */
 app.use('/api', (_req, res) => {

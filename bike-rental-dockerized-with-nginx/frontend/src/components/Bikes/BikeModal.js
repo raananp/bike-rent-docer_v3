@@ -1,3 +1,4 @@
+// BikeModal.js
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Modal, Box, Fade, Typography, Stack, Button, Grid, IconButton,
@@ -11,6 +12,7 @@ import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { DateTimePicker } from '@mui/x-date-pickers/DateTimePicker';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { format } from 'date-fns';
+import { QRCodeSVG } from 'qrcode.react';
 import { modalStyle, UnderlineInput, SilverCard, DarkSection, YnBtn } from './styles';
 
 const DELIVERY_OPTIONS = [
@@ -21,7 +23,60 @@ const DELIVERY_OPTIONS = [
   { value: 'chiang_mai',      label: 'Chiang Mai delivery',         fee: 6000 },
 ];
 
-export default function BikeModal({ open, onClose, bike, bookings, fetchBookings }) {
+// --- Simple PromptPay EMV-QR generator (no Buffer, browser-safe) ---
+function numToHex(n, width=2) {
+  return n.toString().padStart(width, '0');
+}
+function tlv(id, value) {
+  return id + numToHex(value.length) + value;
+}
+function crc16ccitt(bytes) {
+  let crc = 0xFFFF;
+  for (let b of bytes) {
+    crc ^= (b << 8);
+    for (let i = 0; i < 8; i++) {
+      crc = (crc & 0x8000) ? ((crc << 1) ^ 0x1021) & 0xFFFF : (crc << 1) & 0xFFFF;
+    }
+  }
+  return crc.toString(16).toUpperCase().padStart(4, '0');
+}
+function strToBytes(str) {
+  // ASCII-safe; PromptPay payload is ASCII
+  return new TextEncoder().encode(str);
+}
+/** Build a PromptPay payload for Thai phone number ID and optional amount */
+function buildPromptPayPayload({ phone, amount }) {
+  // Normalize Thai phone to national format without separators (e.g., 0812345678)
+  const id = (phone || '').replace(/[^\d]/g, '');
+  if (!id) return '';
+
+  // Merchant Account Information (ID "29") -> AID (00) + mobile (01)
+  const aid = tlv('00', 'A000000677010111');
+  const mobile = tlv('01', id);
+  const mai = tlv('29', aid + mobile);
+
+  // Amount (if provided)
+  const amt = (typeof amount === 'number' && amount > 0)
+    ? tlv('54', amount.toFixed(2))
+    : '';
+
+  // Country code TH, currency 764, static QR (01)
+  const payloadNoCRC =
+    tlv('00', '01') +              // Payload format indicator
+    tlv('01', '11') +              // Point of initiation method (11 = static)
+    mai +
+    tlv('53', '764') +             // Currency (THB)
+    amt +
+    tlv('58', 'TH') +              // Country
+    tlv('59', 'Rental') +          // Merchant name (short)
+    tlv('60', 'Thailand') +        // Merchant city
+    '6304';                        // CRC placeholder
+
+  const crc = crc16ccitt(strToBytes(payloadNoCRC));
+  return payloadNoCRC + crc;
+}
+
+export default function BikeModal({ open, onClose, bike, bookings, fetchBookings, qrPromptPayId }) {
   const [form, setForm] = useState({
     firstName: '',
     lastName: '',
@@ -50,7 +105,7 @@ export default function BikeModal({ open, onClose, bike, bookings, fetchBookings
     }
   }, [bike]);
 
-  // disabled dates for this bike (YYYY-MM-DD)
+  // disabled dates (YYYY-MM-DD) — unchanged
   const disabledDates = useMemo(() => {
     if (!bookings || !bike) return new Set();
     const set = new Set();
@@ -99,7 +154,7 @@ export default function BikeModal({ open, onClose, bike, bookings, fetchBookings
     setStatusMessage('');
   };
 
-  // price calc
+  // price calc — unchanged
   useEffect(() => {
     if (!bike) return;
     const d = parseInt(form.numberOfDays || 0, 10);
@@ -122,9 +177,7 @@ export default function BikeModal({ open, onClose, bike, bookings, fetchBookings
   }, [form.numberOfDays, form.insurance, bike]);
 
   const today = useMemo(() => {
-    const t = new Date();
-    t.setHours(0, 0, 0, 0);
-    return t;
+    const t = new Date(); t.setHours(0, 0, 0, 0); return t;
   }, []);
   const shouldDisableDate = (day) => disabledDates.has(format(day, 'yyyy-MM-dd'));
 
@@ -144,17 +197,14 @@ export default function BikeModal({ open, onClose, bike, bookings, fetchBookings
         setStatusMessage('All fields are required.');
         return;
       }
-
       if (!form.consentGiven) {
         setStatusMessage('You must provide consent to upload/verify documents.');
         return;
       }
-
       if (shouldDisableDate(new Date(form.startDateTime))) {
         setStatusMessage('Selected start date is unavailable for this bike.');
         return;
       }
-
       if (requireUploads && (!licenseFile || !passportFile)) {
         setStatusMessage('License and Passport uploads are required unless you provide docs in office.');
         return;
@@ -199,6 +249,11 @@ export default function BikeModal({ open, onClose, bike, bookings, fetchBookings
     }
   };
 
+  // Calculate QR amount (total incl. delivery)
+  const qrAmount = pricePreview.total + currentDeliveryFee;
+  const promptPayId = qrPromptPayId || '0812345678'; // <-- put your Thai PromptPay phone here for testing
+  const ppPayload = promptPayId ? buildPromptPayPayload({ phone: promptPayId, amount: qrAmount }) : '';
+
   return (
     <Modal open={open} onClose={onClose} closeAfterTransition>
       <Fade in={open}>
@@ -216,7 +271,7 @@ export default function BikeModal({ open, onClose, bike, bookings, fetchBookings
                   {/* LEFT 70% */}
                   <Grid item xs={12} md={8}>
                     <DarkSection>
-                      {/* first/last on the same line */}
+                      {/* first/last on same line */}
                       <Grid container spacing={2} sx={{ mb: 1 }}>
                         <Grid item xs={12} md={6}>
                           <UnderlineInput
@@ -234,7 +289,7 @@ export default function BikeModal({ open, onClose, bike, bookings, fetchBookings
                         </Grid>
                       </Grid>
 
-                      {/* date/days on the same line */}
+                      {/* date/days on same line */}
                       <Grid container spacing={2} sx={{ mb: 2 }}>
                         <Grid item xs={12} md={7}>
                           <LocalizationProvider dateAdapter={AdapterDateFns}>
@@ -299,40 +354,55 @@ export default function BikeModal({ open, onClose, bike, bookings, fetchBookings
                         </Grid>
                       </Grid>
 
-                      {/* insurance (row 1) / provide docs (row 2), YES green / NO red */}
-                      <Stack spacing={2}>
+                      {/* insurance / provide docs */}
+                      <Stack spacing={2} sx={{ mb: 2 }}>
                         <Stack direction="row" alignItems="center" spacing={2}>
                           <Typography sx={{ minWidth: 200, color: '#ddd' }}>Upgrade Insurance</Typography>
                           <div>
-                            <YnBtn
-                              active={form.insurance} yes
-                              onClick={() => toggleBool('insurance', true)}
-                            >Yes</YnBtn>
-                            <YnBtn
-                              active={!form.insurance}
-                              onClick={() => toggleBool('insurance', false)}
-                            >No</YnBtn>
+                            <YnBtn active={form.insurance} yes onClick={() => toggleBool('insurance', true)}>Yes</YnBtn>
+                            <YnBtn active={!form.insurance} onClick={() => toggleBool('insurance', false)}>No</YnBtn>
                           </div>
                         </Stack>
 
                         <Stack direction="row" alignItems="center" spacing={2}>
                           <Typography sx={{ minWidth: 200, color: '#ddd' }}>Provide Docs in Office</Typography>
                           <div>
-                            <YnBtn
-                              active={form.provideDocsInOffice} yes
-                              onClick={() => toggleBool('provideDocsInOffice', true)}
-                            >Yes</YnBtn>
-                            <YnBtn
-                              active={!form.provideDocsInOffice}
-                              onClick={() => toggleBool('provideDocsInOffice', false)}
-                            >No</YnBtn>
+                            <YnBtn active={form.provideDocsInOffice} yes onClick={() => toggleBool('provideDocsInOffice', true)}>Yes</YnBtn>
+                            <YnBtn active={!form.provideDocsInOffice} onClick={() => toggleBool('provideDocsInOffice', false)}>No</YnBtn>
                           </div>
                         </Stack>
                       </Stack>
 
+                      {/* CONSENT — moved LEFT, under toggles */}
+                      <Box sx={{ mb: 2 }}>
+                        <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 1 }}>
+                          {form.consentGiven
+                            ? <GppGoodOutlinedIcon sx={{ color: '#2ecc71' }} />
+                            : <PrivacyTipOutlinedIcon sx={{ color: '#ff5252' }} />}
+                          <Typography variant="subtitle1">Consent</Typography>
+                        </Stack>
+
+                        <Alert severity="info" sx={{ mb: 1, background: '#223', color: '#fff' }}>
+                          We collect passport/license images solely to verify identity for rental in compliance
+                          with Thai law. Documents are stored securely and deleted after the retention period.
+                        </Alert>
+
+                        <Stack direction="row" alignItems="center" spacing={2}>
+                          <Button
+                            variant={form.consentGiven ? 'contained' : 'outlined'}
+                            onClick={() => setForm(f => ({ ...f, consentGiven: !f.consentGiven }))}
+                          >
+                            {form.consentGiven ? 'Consent given' : 'Give consent'}
+                          </Button>
+                          <Typography variant="body2" sx={{ color:'#bbb' }}>
+                            Retention: {form.dataRetentionDays} days · Policy v{form.consentTextVersion}
+                          </Typography>
+                        </Stack>
+                      </Box>
+
                       {/* uploads (if not providing in office) */}
                       {!form.provideDocsInOffice && (
-                        <Grid container spacing={2} sx={{ mt: 2 }}>
+                        <Grid container spacing={2} sx={{ mt: 1 }}>
                           <Grid item xs={12} md={6}>
                             <Stack direction="row" alignItems="center" spacing={2}>
                               <Typography sx={{ minWidth: 160, color: '#ddd' }}>
@@ -402,32 +472,18 @@ export default function BikeModal({ open, onClose, bike, bookings, fetchBookings
                       </Grid>
                     </DarkSection>
 
-                    {/* consent */}
-                    <DarkSection sx={{ mt: 2 }}>
-                      <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 1 }}>
-                        {form.consentGiven
-                          ? <GppGoodOutlinedIcon sx={{ color: '#2ecc71' }} />
-                          : <PrivacyTipOutlinedIcon sx={{ color: '#ff5252' }} />}
-                        <Typography variant="subtitle1">Consent</Typography>
-                      </Stack>
-
-                      <Alert severity="info" sx={{ mb: 1, background: '#223', color: '#fff' }}>
-                        We collect passport/license images solely to verify identity for rental in compliance
-                        with Thai law. Documents are stored securely and deleted after the retention period.
-                      </Alert>
-
-                      <Stack direction="row" alignItems="center" spacing={2}>
-                        <Button
-                          variant={form.consentGiven ? 'contained' : 'outlined'}
-                          onClick={() => setForm(f => ({ ...f, consentGiven: !f.consentGiven }))}
-                        >
-                          {form.consentGiven ? 'Consent given' : 'Give consent'}
-                        </Button>
-                        <Typography variant="body2" sx={{ color:'#bbb' }}>
-                          Retention: {form.dataRetentionDays} days · Policy v{form.consentTextVersion}
+                    {/* PromptPay QR */}
+                    {promptPayId && ppPayload && (
+                      <DarkSection sx={{ mt: 2, textAlign: 'center' }}>
+                        <Typography variant="subtitle1" sx={{ mb: 1 }}>
+                          Pay with PromptPay
                         </Typography>
-                      </Stack>
-                    </DarkSection>
+                        <QRCodeSVG value={ppPayload} size={180} />
+                        <Typography variant="body2" sx={{ mt: 1, color: '#bbb' }}>
+                          {promptPayId} • ฿{qrAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                        </Typography>
+                      </DarkSection>
+                    )}
                   </Grid>
                 </Grid>
 
