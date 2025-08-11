@@ -1,4 +1,3 @@
-// backend/routes/bookings.js
 const express = require('express');
 const multer = require('multer');
 const mime = require('mime-types');
@@ -93,6 +92,17 @@ const signUrl = async (key) => {
   return getSignedUrl(s3, cmd, { expiresIn: 3600 });
 };
 
+// extract S3 key from stored value (key or full URL)
+function extractS3Key(imageUrlOrKey = '') {
+  if (!imageUrlOrKey) return '';
+  try {
+    const u = new URL(imageUrlOrKey);
+    return decodeURIComponent(u.pathname.replace(/^\/+/, ''));
+  } catch {
+    return imageUrlOrKey;
+  }
+}
+
 /* ---------------------- Enrich bookings for UI ---------------------- */
 async function enrichBookings(bookings) {
   const bikes = await Bike.find();
@@ -104,17 +114,28 @@ async function enrichBookings(bookings) {
   return Promise.all(
     bookings.map(async (b) => {
       const result = { ...b.toObject() };
+
       if (b.licenseFileUrl)  result.licenseSignedUrl  = await signUrl(b.licenseFileUrl);
       if (b.passportFileUrl) result.passportSignedUrl = await signUrl(b.passportFileUrl);
 
+      // also return a SIGNED image URL for the bike to avoid AccessDenied
       const bike = bikeMap[b.bike];
       if (bike) {
-        result.bikeImageUrl = bike.imageUrl || '';
         result.perDay = bike.perDay;
         result.perWeek = bike.perWeek;
         result.perMonth = bike.perMonth;
         result.km = bike.km;
+
+        const key = extractS3Key(bike.imageUrl || '');
+        if (key) {
+          try {
+            result.bikeImageUrl = await signUrl(key);
+          } catch {
+            result.bikeImageUrl = bike.imageUrl || ''; // fallback
+          }
+        }
       }
+
       return result;
     })
   );
@@ -159,8 +180,6 @@ function pickField(fields, ...types) {
 
 /** Prefer structured AnalyzeID fields; soft-check name and expiry. */
 function evaluateDocFromAnalyzeID(fields, expectedName) {
-  // Common AnalyzeID types:
-  // FIRST_NAME, GIVEN_NAME(S), LAST_NAME, SURNAME, FULL_NAME, EXPIRATION_DATE/DATE_OF_EXPIRY/etc.
   const first = pickField(fields, 'FIRST_NAME', 'GIVEN_NAME', 'GIVEN_NAMES');
   const last  = pickField(fields, 'LAST_NAME', 'SURNAME');
   const full  = (first || last) ? `${first} ${last}`.trim()
@@ -195,11 +214,10 @@ function evaluateDocFromAnalyzeID(fields, expectedName) {
     status,
     reason,
     extractedName: full || '',
-    fields: (fields || []).map(f => ({ type: f?.Type?.Text, value: f?.ValueDetection?.Text })),
   };
 }
 
-/** Very light OCR fallback: join lines and check name token presence. */
+/** OCR fallback */
 function evaluateDocFromOCR(lines, expectedName) {
   const exp = normalizeName(expectedName);
   const joined = lines.join(' ').replace(/\s+/g, ' ').trim();
@@ -208,7 +226,6 @@ function evaluateDocFromOCR(lines, expectedName) {
   return {
     status: ok ? 'passed' : 'failed',
     reason: ok ? 'OK (OCR fallback)' : `Name mismatch (OCR). expected~"${exp}", got~"N/A"`,
-    ocrPreview: joined.slice(0, 200) + (joined.length > 200 ? '…' : ''),
   };
 }
 
@@ -229,18 +246,11 @@ async function scheduleVerification(saved) {
         if (!key) return { status: 'skipped', reason: 'No file' };
         try {
           const out = await analyzeIdFromS3Key(key);
-          if (process.env.DEBUG_TEXTRACT === '1') {
-            console.log(`[verify] ${label} raw AnalyzeID:`, JSON.stringify(out, null, 2));
-          }
           const fields = out.IdentityDocuments?.[0]?.IdentityDocumentFields || [];
           let result = evaluateDocFromAnalyzeID(fields, expectedName);
 
-          // Fallback to OCR only to rescue a "No name/mismatch"
           if (result.status === 'failed' && /No name|mismatch/i.test(result.reason)) {
             const lines = await detectTextLinesFromS3Key(key);
-            if (process.env.DEBUG_TEXTRACT === '1') {
-              console.log(`[verify] ${label} OCR lines:`, lines);
-            }
             const ocrRes = evaluateDocFromOCR(lines, expectedName);
             if (ocrRes.status === 'passed') result = ocrRes;
           }
@@ -249,7 +259,7 @@ async function scheduleVerification(saved) {
           return result;
         } catch (e) {
           console.warn('[verify] %s error booking=%s %s', label, saved._id, e.message);
-          return { status: 'failed', reason: `Textract error` };
+          return { status: 'failed', reason: 'Textract error' };
         }
       };
 
@@ -323,6 +333,10 @@ router.post('/', auth, upload, async (req, res) => {
     const {
       firstName, lastName, startDateTime, numberOfDays, bike,
       insurance, provideDocsInOffice, consentGiven, consentTextVersion, dataRetentionDays,
+
+      // NEW: delivery fields from client
+      deliveryLocation = 'office_pattaya',
+      deliveryFee = 0,
     } = req.body;
 
     if (!req.user?.email) return res.status(401).json({ error: 'Unauthorized' });
@@ -343,7 +357,7 @@ router.post('/', auth, upload, async (req, res) => {
       ? await uploadToS3(req.files.passportFile[0], firstName, lastName, 'Passport')
       : null;
 
-    const totalPrice = calculatePrice(days, insurance, bike);
+    const totalPrice = calculatePrice(days, insurance, bike); // keep rental price separate from delivery
 
     // Init verification
     let verification = {
@@ -381,6 +395,10 @@ router.post('/', auth, upload, async (req, res) => {
       consentTextVersion: consentTextVersion || 'v1',
       dataRetentionDays: parseInt(dataRetentionDays || 90, 10),
       verification,
+
+      // persist delivery selection
+      deliveryLocation,
+      deliveryFee: Number(deliveryFee) || 0,
     }).save();
 
     if (TEXTRACT_ENABLED && !['true', true, '1', 1].includes(provideDocsInOffice) && (licenseKey || passportKey)) {

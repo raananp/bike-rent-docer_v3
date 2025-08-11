@@ -1,45 +1,56 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  Modal, Box, Fade, Typography, Stack, Button, Grid, IconButton
+  Modal, Box, Fade, Typography, Stack, Button, Grid, IconButton,
+  FormControl, InputLabel, Select, MenuItem, Alert
 } from '@mui/material';
 import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
 import InsertDriveFileOutlinedIcon from '@mui/icons-material/InsertDriveFileOutlined';
+import GppGoodOutlinedIcon from '@mui/icons-material/GppGoodOutlined';
+import PrivacyTipOutlinedIcon from '@mui/icons-material/PrivacyTipOutlined';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { DateTimePicker } from '@mui/x-date-pickers/DateTimePicker';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { format } from 'date-fns';
-import { modalStyle, WhiteInput } from './styles';
+import { modalStyle, UnderlineInput, SilverCard, DarkSection, YnBtn } from './styles';
+
+const DELIVERY_OPTIONS = [
+  { value: 'office_pattaya',  label: 'Pickup at office (Pattaya)', fee: 0 },
+  { value: 'delivery_pattaya',label: 'Delivery in Pattaya',        fee: 300 },
+  { value: 'bangkok',         label: 'Bangkok delivery',            fee: 3000 },
+  { value: 'phuket',          label: 'Phuket delivery',             fee: 5000 },
+  { value: 'chiang_mai',      label: 'Chiang Mai delivery',         fee: 6000 },
+];
 
 export default function BikeModal({ open, onClose, bike, bookings, fetchBookings }) {
   const [form, setForm] = useState({
     firstName: '',
     lastName: '',
-    startDateTime: null,     // Date object for DateTimePicker
+    startDateTime: null,
     numberOfDays: '',
     bike: '',
     insurance: false,
     provideDocsInOffice: false,
+    deliveryLocation: 'office_pattaya',
+    consentGiven: false,
+    consentTextVersion: 'v1',
+    dataRetentionDays: 90,
   });
 
   const [licenseFile, setLicenseFile] = useState(null);
   const [passportFile, setPassportFile] = useState(null);
   const [statusMessage, setStatusMessage] = useState('');
-  const [pricePreview, setPricePreview] = useState({ base: 0, surcharge: 0, insurance: 0, total: 0 });
-
-  // ✅ PDPA consent state
-  const [consent, setConsent] = useState(false);
+  const [pricePreview, setPricePreview] = useState({ base: 0, insurance: 0, total: 0 });
 
   const licenseInputRef = useRef(null);
   const passportInputRef = useRef(null);
 
   useEffect(() => {
     if (bike) {
-      // Save readable "Name Model" for the booking record
       setForm((f) => ({ ...f, bike: `${bike.name || ''} ${bike.modelYear || ''}`.trim() }));
     }
   }, [bike]);
 
-  // Build a set of disabled (booked) dates for this bike (YYYY-MM-DD)
+  // disabled dates for this bike (YYYY-MM-DD)
   const disabledDates = useMemo(() => {
     if (!bookings || !bike) return new Set();
     const set = new Set();
@@ -47,21 +58,15 @@ export default function BikeModal({ open, onClose, bike, bookings, fetchBookings
     const thisName = `${bike.name || ''} ${bike.modelYear || ''}`.trim();
 
     const addRange = (start, end) => {
-      const d0 = new Date(start);
-      d0.setHours(0, 0, 0, 0);
-      const d1 = new Date(end || start);
-      d1.setHours(0, 0, 0, 0);
+      const d0 = new Date(start); d0.setHours(0,0,0,0);
+      const d1 = new Date(end || start); d1.setHours(0,0,0,0);
       for (let d = new Date(d0); d <= d1; d.setDate(d.getDate() + 1)) {
         set.add(format(d, 'yyyy-MM-dd'));
       }
     };
 
     bookings
-      .filter((b) =>
-        b.bike === thisName ||     // name+model stored
-        b.bike === thisId   ||     // id stored as string
-        b.bike?._id === thisId     // bike stored as object
-      )
+      .filter((b) => b.bike === thisName || b.bike === thisId || b.bike?._id === thisId)
       .forEach((b) => addRange(b.startDateTime, b.endDateTime));
 
     return set;
@@ -75,15 +80,13 @@ export default function BikeModal({ open, onClose, bike, bookings, fetchBookings
 
   const toggleBool = (key, val) => {
     setForm((f) => ({ ...f, [key]: val }));
-    if (key === 'provideDocsInOffice' && val === true) {
-      // Clear files when switching to "Provide in Office"
+    if (key === 'provideDocsInOffice' && val) {
       setLicenseFile(null);
       setPassportFile(null);
     }
   };
 
   const handlePickFile = (ref) => ref?.current?.click();
-
   const handleFileChange = (e, type) => {
     const file = e.target.files && e.target.files[0];
     if (!file) return;
@@ -96,7 +99,7 @@ export default function BikeModal({ open, onClose, bike, bookings, fetchBookings
     setStatusMessage('');
   };
 
-  // Price calculation (day/week/month tiers + optional insurance)
+  // price calc
   useEffect(() => {
     if (!bike) return;
     const d = parseInt(form.numberOfDays || 0, 10);
@@ -114,11 +117,10 @@ export default function BikeModal({ open, onClose, bike, bookings, fetchBookings
     } else {
       base = d * (bike.perDay || 0);
     }
-    const insuranceCost = form.insurance ? d * 100 : 0;
-    setPricePreview({ base, surcharge: 0, insurance: insuranceCost, total: base + insuranceCost });
+    const insuranceCost = form.insurance ? d * 100 : 0; // adjust if needed
+    setPricePreview({ base, insurance: insuranceCost, total: base + insuranceCost });
   }, [form.numberOfDays, form.insurance, bike]);
 
-  // Calendar rules
   const today = useMemo(() => {
     const t = new Date();
     t.setHours(0, 0, 0, 0);
@@ -126,12 +128,14 @@ export default function BikeModal({ open, onClose, bike, bookings, fetchBookings
   }, []);
   const shouldDisableDate = (day) => disabledDates.has(format(day, 'yyyy-MM-dd'));
 
-  // Validation: uploads required only when NOT providing in office
   const requireUploads = !form.provideDocsInOffice;
+  const currentDeliveryFee = useMemo(
+    () => DELIVERY_OPTIONS.find(o => o.value === form.deliveryLocation)?.fee ?? 0,
+    [form.deliveryLocation]
+  );
 
   const handleSubmit = async () => {
     try {
-      // Validate required fields
       if (!form.firstName?.trim() ||
           !form.lastName?.trim() ||
           !form.startDateTime ||
@@ -141,21 +145,18 @@ export default function BikeModal({ open, onClose, bike, bookings, fetchBookings
         return;
       }
 
-      // Validate PDPA consent
-      if (!consent) {
-        setStatusMessage('Please provide consent to proceed.');
+      if (!form.consentGiven) {
+        setStatusMessage('You must provide consent to upload/verify documents.');
         return;
       }
 
-      // Validate date availability
       if (shouldDisableDate(new Date(form.startDateTime))) {
         setStatusMessage('Selected start date is unavailable for this bike.');
         return;
       }
 
-      // Validate uploads when required
       if (requireUploads && (!licenseFile || !passportFile)) {
-        setStatusMessage('License and Passport uploads are required.');
+        setStatusMessage('License and Passport uploads are required unless you provide docs in office.');
         return;
       }
 
@@ -165,26 +166,23 @@ export default function BikeModal({ open, onClose, bike, bookings, fetchBookings
         lastName: form.lastName.trim(),
         startDateTime: new Date(form.startDateTime).toISOString(),
         numberOfDays: form.numberOfDays,
-        bike: form.bike, // name + model
+        bike: form.bike,
         insurance: form.insurance,
         provideDocsInOffice: form.provideDocsInOffice,
-        totalPrice: pricePreview.total,
-
-        // ✅ Consent fields expected by backend
         consentGiven: true,
-        consentTextVersion: 'v1',
-        dataRetentionDays: 90,
+        consentTextVersion: form.consentTextVersion,
+        dataRetentionDays: form.dataRetentionDays,
+        deliveryLocation: form.deliveryLocation,
+        deliveryFee: currentDeliveryFee,
       }).forEach(([k, v]) => body.append(k, v));
 
-      // 🔁 use backend's expected field names
       if (licenseFile) body.append('licenseFile', licenseFile);
       if (passportFile) body.append('passportFile', passportFile);
 
-      // 🔐 send JWT so backend can attach userId/userEmail
       const token = localStorage.getItem('token');
       const res = await fetch('/api/bookings', {
         method: 'POST',
-        headers: token ? { Authorization: `Bearer ${token}` } : undefined, // don't set Content-Type for FormData
+        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
         body,
       });
 
@@ -205,232 +203,251 @@ export default function BikeModal({ open, onClose, bike, bookings, fetchBookings
     <Modal open={open} onClose={onClose} closeAfterTransition>
       <Fade in={open}>
         <Box sx={modalStyle}>
-          {!bike ? (
-            <Typography>Loading…</Typography>
-          ) : (
-            <Box>
-              <Typography variant="h5" sx={{ mb: 2 }}>
-                {bike.name} {bike.modelYear}
-              </Typography>
+          <SilverCard>
+            {!bike ? (
+              <Typography>Loading…</Typography>
+            ) : (
+              <Box>
+                <Typography variant="h5" sx={{ mb: 2, color: '#111' }}>
+                  {bike.name} {bike.modelYear}
+                </Typography>
 
-              {/* Top form rows (all required) */}
-              <Grid container spacing={2} sx={{ mb: 2 }}>
-                <Grid item xs={12} sm={6}>
-                  <WhiteInput
-                    required
-                    fullWidth
-                    label="First Name"
-                    name="firstName"
-                    value={form.firstName}
-                    onChange={handleTextChange}
-                  />
-                </Grid>
-                <Grid item xs={12} sm={6}>
-                  <WhiteInput
-                    required
-                    fullWidth
-                    label="Last Name"
-                    name="lastName"
-                    value={form.lastName}
-                    onChange={handleTextChange}
-                  />
-                </Grid>
+                <Grid container spacing={3}>
+                  {/* LEFT 70% */}
+                  <Grid item xs={12} md={8}>
+                    <DarkSection>
+                      {/* first/last on the same line */}
+                      <Grid container spacing={2} sx={{ mb: 1 }}>
+                        <Grid item xs={12} md={6}>
+                          <UnderlineInput
+                            variant="standard"
+                            required fullWidth label="First Name" name="firstName"
+                            value={form.firstName} onChange={handleTextChange}
+                          />
+                        </Grid>
+                        <Grid item xs={12} md={6}>
+                          <UnderlineInput
+                            variant="standard"
+                            required fullWidth label="Last Name" name="lastName"
+                            value={form.lastName} onChange={handleTextChange}
+                          />
+                        </Grid>
+                      </Grid>
 
-                <Grid item xs={12} sm={6}>
-                  <LocalizationProvider dateAdapter={AdapterDateFns}>
-                    <DateTimePicker
-                      label="Start Date & Time"
-                      value={form.startDateTime}
-                      onChange={(val) => setForm((f) => ({ ...f, startDateTime: val }))}
-                      views={['year', 'month', 'day', 'hours', 'minutes']}
-                      openTo="day"
-                      showDaysOutsideCurrentMonth
-                      reduceAnimations
-                      disablePast
-                      minDate={today}                 // allow starting today
-                      shouldDisableDate={shouldDisableDate} // block booked days
-                      slotProps={{
-                        textField: {
-                          required: true,
-                          fullWidth: true,
-                          InputLabelProps: { shrink: true },
-                          sx: {
-                            '& .MuiInputBase-root': { color: 'white' },
-                            '& .MuiFormLabel-root': { color: '#aaa' },
-                          },
-                        },
-                      }}
-                    />
-                  </LocalizationProvider>
-                </Grid>
+                      {/* date/days on the same line */}
+                      <Grid container spacing={2} sx={{ mb: 2 }}>
+                        <Grid item xs={12} md={7}>
+                          <LocalizationProvider dateAdapter={AdapterDateFns}>
+                            <DateTimePicker
+                              label="Start Date & Time"
+                              value={form.startDateTime}
+                              onChange={(val) => setForm((f) => ({ ...f, startDateTime: val }))}
+                              views={['year','month','day','hours','minutes']}
+                              openTo="day"
+                              reduceAnimations
+                              disablePast
+                              minDate={today}
+                              shouldDisableDate={shouldDisableDate}
+                              slotProps={{
+                                textField: {
+                                  variant: 'standard',
+                                  required: true,
+                                  fullWidth: true,
+                                  InputLabelProps: { shrink: true },
+                                  sx: {
+                                    '& .MuiInputBase-root': { color: '#fff' },
+                                    '& .MuiFormLabel-root': { color: '#cfcfcf' },
+                                    '& .MuiInput-underline:before': { borderBottomColor: '#bfbfbf' },
+                                    '& .MuiInput-underline:after': { borderBottomColor: '#90ee90' },
+                                  },
+                                },
+                              }}
+                            />
+                          </LocalizationProvider>
+                        </Grid>
+                        <Grid item xs={12} md={5}>
+                          <UnderlineInput
+                            variant="standard"
+                            required fullWidth label="Number of Days" type="number" inputProps={{ min: 1 }}
+                            name="numberOfDays" value={form.numberOfDays} onChange={handleTextChange}
+                          />
+                        </Grid>
+                      </Grid>
 
-                <Grid item xs={12} sm={6}>
-                  <WhiteInput
-                    required
-                    fullWidth
-                    label="Number of Days"
-                    type="number"
-                    inputProps={{ min: 1 }}
-                    name="numberOfDays"
-                    value={form.numberOfDays}
-                    onChange={handleTextChange}
-                  />
-                </Grid>
-              </Grid>
+                      {/* delivery as dropdown */}
+                      <Grid container spacing={2} sx={{ mb: 2 }}>
+                        <Grid item xs={12}>
+                          <FormControl variant="standard" fullWidth>
+                            <InputLabel sx={{ color: '#cfcfcf' }}>Pickup / Delivery</InputLabel>
+                            <Select
+                              value={form.deliveryLocation}
+                              onChange={(e) => setForm(f => ({ ...f, deliveryLocation: e.target.value }))}
+                              sx={{
+                                color: '#fff',
+                                '& .MuiSvgIcon-root': { color: '#fff' },
+                                '&:before': { borderBottomColor: '#bfbfbf' },
+                                '&:after': { borderBottomColor: '#90ee90' },
+                              }}
+                            >
+                              {DELIVERY_OPTIONS.map(opt => (
+                                <MenuItem key={opt.value} value={opt.value}>
+                                  {opt.label} — ฿{opt.fee.toLocaleString()}
+                                </MenuItem>
+                              ))}
+                            </Select>
+                          </FormControl>
+                        </Grid>
+                      </Grid>
 
-              {/* Inline Yes/No rows */}
-              <Grid container spacing={2} sx={{ mb: 2 }}>
-                <Grid item xs={12} sm={6}>
-                  <Stack direction="row" alignItems="center" spacing={2}>
-                    <Typography sx={{ minWidth: 180 }}>Upgrade Insurance:</Typography>
-                    <Stack direction="row" spacing={2}>
-                      <Button
-                        variant="text"
-                        sx={{ borderBottom: form.insurance ? '2px solid #fff' : '2px solid transparent', color:'#fff', px:1 }}
-                        onClick={() => toggleBool('insurance', true)}
-                      >
-                        Yes
-                      </Button>
-                      <Button
-                        variant="text"
-                        sx={{ borderBottom: !form.insurance ? '2px solid #fff' : '2px solid transparent', color:'#fff', px:1 }}
-                        onClick={() => toggleBool('insurance', false)}
-                      >
-                        No
-                      </Button>
-                    </Stack>
-                  </Stack>
-                </Grid>
+                      {/* insurance (row 1) / provide docs (row 2), YES green / NO red */}
+                      <Stack spacing={2}>
+                        <Stack direction="row" alignItems="center" spacing={2}>
+                          <Typography sx={{ minWidth: 200, color: '#ddd' }}>Upgrade Insurance</Typography>
+                          <div>
+                            <YnBtn
+                              active={form.insurance} yes
+                              onClick={() => toggleBool('insurance', true)}
+                            >Yes</YnBtn>
+                            <YnBtn
+                              active={!form.insurance}
+                              onClick={() => toggleBool('insurance', false)}
+                            >No</YnBtn>
+                          </div>
+                        </Stack>
 
-                <Grid item xs={12} sm={6}>
-                  <Stack direction="row" alignItems="center" spacing={2}>
-                    <Typography sx={{ minWidth: 180 }}>Provide Docs in Office:</Typography>
-                    <Stack direction="row" spacing={2}>
-                      <Button
-                        variant="text"
-                        sx={{ borderBottom: form.provideDocsInOffice ? '2px solid #fff' : '2px solid transparent', color:'#fff', px:1 }}
-                        onClick={() => toggleBool('provideDocsInOffice', true)}
-                      >
-                        Yes
-                      </Button>
-                      <Button
-                        variant="text"
-                        sx={{ borderBottom: !form.provideDocsInOffice ? '2px solid #fff' : '2px solid transparent', color:'#fff', px:1 }}
-                        onClick={() => toggleBool('provideDocsInOffice', false)}
-                      >
-                        No
-                      </Button>
-                    </Stack>
-                  </Stack>
-                </Grid>
-              </Grid>
-
-              {/* Uploads + Price Breakdown */}
-              <Grid container spacing={3} sx={{ mb: 1 }}>
-                {/* Show uploads only when NOT providing docs in office */}
-                {!form.provideDocsInOffice && (
-                  <Grid item xs={12} md={6}>
-                    <Stack spacing={2}>
-                      <Stack direction="row" alignItems="center" spacing={2}>
-                        <Typography sx={{ minWidth: 160 }}>
-                          Upload License <span style={{ color: '#ff6b6b' }}>*</span>
-                        </Typography>
-                        <IconButton onClick={() => handlePickFile(licenseInputRef)}>
-                          {licenseFile ? (
-                            <CheckCircleOutlineIcon sx={{ color: 'limegreen' }} />
-                          ) : (
-                            <InsertDriveFileOutlinedIcon sx={{ color: '#fff' }} />
-                          )}
-                        </IconButton>
-                        <input
-                          ref={licenseInputRef}
-                          type="file"
-                          accept="image/*"
-                          hidden
-                          onChange={(e) => handleFileChange(e, 'license')}
-                        />
+                        <Stack direction="row" alignItems="center" spacing={2}>
+                          <Typography sx={{ minWidth: 200, color: '#ddd' }}>Provide Docs in Office</Typography>
+                          <div>
+                            <YnBtn
+                              active={form.provideDocsInOffice} yes
+                              onClick={() => toggleBool('provideDocsInOffice', true)}
+                            >Yes</YnBtn>
+                            <YnBtn
+                              active={!form.provideDocsInOffice}
+                              onClick={() => toggleBool('provideDocsInOffice', false)}
+                            >No</YnBtn>
+                          </div>
+                        </Stack>
                       </Stack>
 
-                      <Stack direction="row" alignItems="center" spacing={2}>
-                        <Typography sx={{ minWidth: 160 }}>
-                          Upload Passport <span style={{ color: '#ff6b6b' }}>*</span>
-                        </Typography>
-                        <IconButton onClick={() => handlePickFile(passportInputRef)}>
-                          {passportFile ? (
-                            <CheckCircleOutlineIcon sx={{ color: 'limegreen' }} />
-                          ) : (
-                            <InsertDriveFileOutlinedIcon sx={{ color: '#fff' }} />
-                          )}
-                        </IconButton>
-                        <input
-                          ref={passportInputRef}
-                          type="file"
-                          accept="image/*"
-                          hidden
-                          onChange={(e) => handleFileChange(e, 'passport')}
-                        />
-                      </Stack>
-                    </Stack>
+                      {/* uploads (if not providing in office) */}
+                      {!form.provideDocsInOffice && (
+                        <Grid container spacing={2} sx={{ mt: 2 }}>
+                          <Grid item xs={12} md={6}>
+                            <Stack direction="row" alignItems="center" spacing={2}>
+                              <Typography sx={{ minWidth: 160, color: '#ddd' }}>
+                                Upload License <span style={{ color: '#ff6b6b' }}>*</span>
+                              </Typography>
+                              <IconButton onClick={() => handlePickFile(licenseInputRef)}>
+                                {licenseFile
+                                  ? <CheckCircleOutlineIcon sx={{ color: 'limegreen' }} />
+                                  : <InsertDriveFileOutlinedIcon sx={{ color: '#fff' }} />}
+                              </IconButton>
+                              <input
+                                ref={licenseInputRef}
+                                type="file" accept="image/*" hidden
+                                onChange={(e) => handleFileChange(e, 'license')}
+                              />
+                            </Stack>
+                          </Grid>
+
+                          <Grid item xs={12} md={6}>
+                            <Stack direction="row" alignItems="center" spacing={2}>
+                              <Typography sx={{ minWidth: 160, color: '#ddd' }}>
+                                Upload Passport <span style={{ color: '#ff6b6b' }}>*</span>
+                              </Typography>
+                              <IconButton onClick={() => handlePickFile(passportInputRef)}>
+                                {passportFile
+                                  ? <CheckCircleOutlineIcon sx={{ color: 'limegreen' }} />
+                                  : <InsertDriveFileOutlinedIcon sx={{ color: '#fff' }} />}
+                              </IconButton>
+                              <input
+                                ref={passportInputRef}
+                                type="file" accept="image/*" hidden
+                                onChange={(e) => handleFileChange(e, 'passport')}
+                              />
+                            </Stack>
+                          </Grid>
+                        </Grid>
+                      )}
+                    </DarkSection>
                   </Grid>
+
+                  {/* RIGHT 30% */}
+                  <Grid item xs={12} md={4}>
+                    <DarkSection>
+                      <Typography variant="subtitle1" sx={{ mb: 1 }}>Price Summary</Typography>
+                      <Grid container spacing={1}>
+                        <Grid item xs={7}><Typography>Base</Typography></Grid>
+                        <Grid item xs={5}><Typography align="right">฿{pricePreview.base.toLocaleString()}</Typography></Grid>
+
+                        {form.insurance && (
+                          <>
+                            <Grid item xs={7}><Typography>Insurance</Typography></Grid>
+                            <Grid item xs={5}><Typography align="right">฿{pricePreview.insurance.toLocaleString()}</Typography></Grid>
+                          </>
+                        )}
+
+                        <Grid item xs={7}><Typography>Delivery</Typography></Grid>
+                        <Grid item xs={5}><Typography align="right">฿{currentDeliveryFee.toLocaleString()}</Typography></Grid>
+
+                        <Grid item xs={12}><Box sx={{ borderBottom: '1px solid #333', my: 1 }} /></Grid>
+
+                        <Grid item xs={7}><Typography variant="h6">Total</Typography></Grid>
+                        <Grid item xs={5}>
+                          <Typography variant="h6" align="right">
+                            ฿{(pricePreview.total + currentDeliveryFee).toLocaleString()}
+                          </Typography>
+                        </Grid>
+                      </Grid>
+                    </DarkSection>
+
+                    {/* consent */}
+                    <DarkSection sx={{ mt: 2 }}>
+                      <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 1 }}>
+                        {form.consentGiven
+                          ? <GppGoodOutlinedIcon sx={{ color: '#2ecc71' }} />
+                          : <PrivacyTipOutlinedIcon sx={{ color: '#ff5252' }} />}
+                        <Typography variant="subtitle1">Consent</Typography>
+                      </Stack>
+
+                      <Alert severity="info" sx={{ mb: 1, background: '#223', color: '#fff' }}>
+                        We collect passport/license images solely to verify identity for rental in compliance
+                        with Thai law. Documents are stored securely and deleted after the retention period.
+                      </Alert>
+
+                      <Stack direction="row" alignItems="center" spacing={2}>
+                        <Button
+                          variant={form.consentGiven ? 'contained' : 'outlined'}
+                          onClick={() => setForm(f => ({ ...f, consentGiven: !f.consentGiven }))}
+                        >
+                          {form.consentGiven ? 'Consent given' : 'Give consent'}
+                        </Button>
+                        <Typography variant="body2" sx={{ color:'#bbb' }}>
+                          Retention: {form.dataRetentionDays} days · Policy v{form.consentTextVersion}
+                        </Typography>
+                      </Stack>
+                    </DarkSection>
+                  </Grid>
+                </Grid>
+
+                {statusMessage && (
+                  <Typography color="error" sx={{ mt: 2 }}>{statusMessage}</Typography>
                 )}
 
-                {/* Price breakdown: ALWAYS visible. Full width if uploads are hidden */}
-                <Grid item xs={12} md={form.provideDocsInOffice ? 12 : 6}>
-                  <Box>
-                    <Grid container>
-                      <Grid item xs={7}><Typography>Base</Typography></Grid>
-                      <Grid item xs={5}><Typography align="right">฿{pricePreview.base}</Typography></Grid>
-
-                      {form.insurance ? (
-                        <>
-                          <Grid item xs={7}><Typography>Insurance</Typography></Grid>
-                          <Grid item xs={5}><Typography align="right">฿{pricePreview.insurance}</Typography></Grid>
-                        </>
-                      ) : null}
-
-                      <Grid item xs={12}><Box sx={{ borderBottom: '1px solid #333', my: 1 }} /></Grid>
-
-                      <Grid item xs={7}><Typography variant="h6">Total</Typography></Grid>
-                      <Grid item xs={5}><Typography variant="h6" align="right">฿{pricePreview.total}</Typography></Grid>
-                    </Grid>
-
-                    <Typography variant="caption" sx={{ color: 'gray', display:'block', mt:1 }}>
-                      Per Day: ฿{bike.perDay}  •  Per Week: ฿{bike.perWeek}  •  Per Month: ฿{bike.perMonth}
-                    </Typography>
-                  </Box>
-                </Grid>
-              </Grid>
-
-              {/* 🔒 PDPA consent */}
-              <Grid container sx={{ mt: 2 }}>
-                <Grid item xs={12}>
-                  <Box sx={{ p: 2, borderRadius: 2, backgroundColor: '#181818', border: '1px solid #2a2a2a' }}>
-                    <Typography variant="subtitle1" sx={{ mb: 1 }}>Privacy & Consent (PDPA)</Typography>
-                    <Typography variant="body2" sx={{ color: 'gray', mb: 1 }}>
-                      We collect and process your license/passport solely for rental verification and insurance purposes.
-                      Files are stored securely and deleted within 90 days after rental completion.
-                    </Typography>
-                    <label style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                      <input
-                        type="checkbox"
-                        checked={consent}
-                        onChange={(e) => setConsent(e.target.checked)}
-                        required
-                      />
-                      <span>I consent to the collection and processing of my documents for this booking.</span>
-                    </label>
-                  </Box>
-                </Grid>
-              </Grid>
-
-              <Stack direction="row" justifyContent="flex-end" spacing={2} sx={{ mt: 2 }}>
-                <Button onClick={onClose}>Cancel</Button>
-                <Button variant="contained" onClick={handleSubmit}>Confirm Booking</Button>
-              </Stack>
-
-              {statusMessage && <Typography color="error" sx={{ mt: 1 }}>{statusMessage}</Typography>}
-            </Box>
-          )}
+                <Stack direction="row" justifyContent="flex-end" spacing={2} sx={{ mt: 3 }}>
+                  <Button onClick={onClose}>Cancel</Button>
+                  <Button
+                    variant="contained"
+                    onClick={handleSubmit}
+                    disabled={!form.consentGiven}
+                  >
+                    Confirm Booking
+                  </Button>
+                </Stack>
+              </Box>
+            )}
+          </SilverCard>
         </Box>
       </Fade>
     </Modal>

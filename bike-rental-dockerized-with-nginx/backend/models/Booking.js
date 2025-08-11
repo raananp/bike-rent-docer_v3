@@ -2,8 +2,8 @@ const mongoose = require('mongoose');
 
 const verificationSub = new mongoose.Schema({
   status: { type: String, enum: ['pending','passed','failed','skipped'], default: 'pending' },
-  reason: { type: String },              // optional message (why failed/passed)
-  fields: { type: mongoose.Schema.Types.Mixed }, // extracted fields
+  reason: { type: String },
+  fields: { type: mongoose.Schema.Types.Mixed },
 }, { _id: false });
 
 const bookingSchema = new mongoose.Schema({
@@ -20,6 +20,14 @@ const bookingSchema = new mongoose.Schema({
   userId:    { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   userEmail: { type: String, required: true },
 
+  // NEW: delivery selection
+  deliveryLocation: {
+    type: String,
+    enum: ['office_pattaya', 'delivery_pattaya', 'bangkok', 'phuket', 'chiang_mai'],
+    default: 'office_pattaya',
+  },
+  deliveryFee: { type: Number, default: 0 },
+
   // unified verification object (what your Admin table reads)
   verification: {
     status:   { type: String, enum: ['pending','passed','failed','skipped'], default: 'pending' },
@@ -28,7 +36,7 @@ const bookingSchema = new mongoose.Schema({
     updatedAt:{ type: Date, default: Date.now },
   },
 
-  // PDPA bits (already discussed)
+  // PDPA bits
   consentGiven: { type: Boolean, default: false },
   consentTextVersion: { type: String },
   consentAt: { type: Date },

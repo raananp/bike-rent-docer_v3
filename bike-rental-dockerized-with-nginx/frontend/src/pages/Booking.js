@@ -5,7 +5,7 @@ import './Booking.css';
 async function safeJsonFetch(url, options = {}) {
   const res = await fetch(url, options);
   const ct = res.headers.get('content-type') || '';
-  const text = await res.text(); // read once
+  const text = await res.text();
   if (!res.ok) {
     const snippet = text.slice(0, 300);
     throw new Error(`HTTP ${res.status}: ${snippet}`);
@@ -38,7 +38,7 @@ function computePrice(days, insurance, rates) {
   return { base, insurance: insuranceCost, total };
 }
 
-// --- verification helpers (UI-only) ---
+// --- verification badge helpers ---
 function statusClass(s) {
   switch ((s || '').toLowerCase()) {
     case 'passed':  return 'badge badge-success';
@@ -49,14 +49,22 @@ function statusClass(s) {
   }
 }
 
+// Map saved delivery codes → labels
+function deliveryLabel(code) {
+  switch (code) {
+    case 'office_pattaya':   return 'Pickup at office (Pattaya)';
+    case 'delivery_pattaya': return 'Delivery in Pattaya';
+    case 'bangkok':          return 'Bangkok delivery';
+    case 'phuket':           return 'Phuket delivery';
+    case 'chiang_mai':       return 'Chiang Mai delivery';
+    default:                 return code || '—';
+  }
+}
+
 export default function Booking() {
   const [bookings, setBookings] = useState([]);
   const [bikesData, setBikesData] = useState([]);
   const [statusMessage, setStatusMessage] = useState('');
-  const [delivery, setDelivery] = useState('pickup'); // pickup | bangkok | nationwide
-
-  // Dummy delivery table (฿)
-  const deliveryPrices = { pickup: 0, bangkok: 800, nationwide: 1500 };
 
   // Map for quick bike rate lookup: "Name Year" -> {perDay, perWeek, perMonth}
   const bikeRateMap = useMemo(() => {
@@ -111,7 +119,7 @@ export default function Booking() {
 
     const id = setInterval(() => {
       fetchBookings().catch(() => {});
-    }, 8000); // poll every ~8s
+    }, 8000);
     return () => clearInterval(id);
   }, [bookings]);
 
@@ -119,28 +127,21 @@ export default function Booking() {
     if (!isoString) return '';
     const date = new Date(isoString);
     return date.toLocaleString('en-GB', {
-      year: 'numeric',
-      month: 'short',
-      day: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit',
+      year: 'numeric', month: 'short', day: '2-digit',
+      hour: '2-digit', minute: '2-digit',
     });
   };
 
   // Ensure each booking has a computedTotal in case backend totalPrice is 0/missing
   const bookingsWithTotals = useMemo(() => {
     return bookings.map((b) => {
-      // Prefer rates already enriched onto the booking
       const ratesFromBooking = (b.perDay || b.perWeek || b.perMonth)
         ? { perDay: b.perDay, perWeek: b.perWeek, perMonth: b.perMonth }
         : null;
-
-      // Fallback: lookup from bikes list by "Name Year"
       const ratesFromMap = bikeRateMap.get(b.bike || '') || null;
 
       const rates = ratesFromBooking || ratesFromMap;
       const days = Number(b.numberOfDays || 0);
-
       const computed = computePrice(days, !!b.insurance, rates || { perDay: 0, perWeek: 0, perMonth: 0 });
       const total = Number(b.totalPrice || 0) > 0 ? Number(b.totalPrice) : computed.total;
 
@@ -152,13 +153,19 @@ export default function Booking() {
     });
   }, [bookings, bikeRateMap]);
 
-  // Cart totals
+  // Totals (delivery is now per-booking, coming from backend)
   const subtotal = useMemo(() => {
     return bookingsWithTotals.reduce((acc, b) => acc + (Number(b.__finalTotal) || 0), 0);
   }, [bookingsWithTotals]);
 
-  const deliveryFee = deliveryPrices[delivery] ?? 0;
-  const grandTotal = subtotal + deliveryFee;
+  const deliveryTotal = useMemo(() => {
+    return bookingsWithTotals.reduce((acc, b) => acc + (Number(b.deliveryFee) || 0), 0);
+  }, [bookingsWithTotals]);
+
+  const grandTotal = subtotal + deliveryTotal;
+
+  // small offset so the summary card lines up with the first booking card (under the page title)
+  const SUMMARY_TOP_OFFSET_PX = 24; // adjust if you want tighter/looser alignment
 
   return (
     <div className="cart-page">
@@ -174,8 +181,8 @@ export default function Booking() {
             </div>
           ) : (
             <ul className="cart-items">
-              {bookingsWithTotals.map((b) => {
-                // --- derive verification status for display ---
+              {bookingsWithTotals.map((b, idx) => {
+                // verification status for display
                 const licStatus  = b?.verification?.license?.status  ?? (b.licenseSignedUrl  ? 'pending' : 'skipped');
                 const licReason  = b?.verification?.license?.reason  ?? '';
                 const passStatus = b?.verification?.passport?.status ?? (b.passportSignedUrl ? 'pending' : 'skipped');
@@ -187,7 +194,6 @@ export default function Booking() {
                   : 'passed'
                 );
 
-                // prefer signed URL for bike image
                 const imgSrc = b.bikeImageSignedUrl || b.bikeImageUrl || '';
 
                 return (
@@ -198,9 +204,8 @@ export default function Booking() {
                           src={imgSrc}
                           alt={b.bike}
                           onError={(e) => {
-                            // If the presigned URL expired, fetch again to refresh it
                             if (e?.target) e.target.onerror = null;
-                            fetchBookings();
+                            fetchBookings(); // refresh signed URL if it expired
                           }}
                         />
                       ) : (
@@ -253,6 +258,14 @@ export default function Booking() {
                             </span>
                           </div>
                         )}
+
+                        {/* Delivery per booking */}
+                        <div className="meta-row">
+                          <span className="meta-label">Pickup / Delivery</span>
+                          <span className="meta-value">
+                            {deliveryLabel(b.deliveryLocation)}{typeof b.deliveryFee === 'number' ? ` — ฿${Number(b.deliveryFee).toLocaleString()}` : ''}
+                          </span>
+                        </div>
                       </div>
 
                       {/* Files */}
@@ -295,7 +308,7 @@ export default function Booking() {
             </ul>
           )}
 
-          {/* Info sections like Apple cart */}
+          {/* Info panels (Delivery section removed as requested) */}
           <div className="info-panels">
             <div className="info-card">
               <h3>Insurance Options</h3>
@@ -309,62 +322,11 @@ export default function Booking() {
                 <li>Third‑party liability included</li>
               </ul>
             </div>
-
-            <div className="info-card">
-              <h3>Delivery Across Thailand</h3>
-              <p className="muted">Choose how you’d like to receive your bike(s):</p>
-              <div className="delivery-options">
-                <label className={`delivery-option ${delivery === 'pickup' ? 'active' : ''}`}>
-                  <input
-                    type="radio"
-                    name="delivery"
-                    value="pickup"
-                    checked={delivery === 'pickup'}
-                    onChange={() => setDelivery('pickup')}
-                  />
-                  <div>
-                    <div className="option-title">Pattaya pickup</div>
-                    <div className="option-sub">Free — collect at our office</div>
-                  </div>
-                  <div className="option-price">฿0</div>
-                </label>
-
-                <label className={`delivery-option ${delivery === 'bangkok' ? 'active' : ''}`}>
-                  <input
-                    type="radio"
-                    name="delivery"
-                    value="bangkok"
-                    checked={delivery === 'bangkok'}
-                    onChange={() => setDelivery('bangkok')}
-                  />
-                  <div>
-                    <div className="option-title">Bangkok delivery</div>
-                    <div className="option-sub">Same/next day, 10:00–18:00</div>
-                  </div>
-                  <div className="option-price">฿800</div>
-                </label>
-
-                <label className={`delivery-option ${delivery === 'nationwide' ? 'active' : ''}`}>
-                  <input
-                    type="radio"
-                    name="delivery"
-                    value="nationwide"
-                    checked={delivery === 'nationwide'}
-                    onChange={() => setDelivery('nationwide')}
-                  />
-                  <div>
-                    <div className="option-title">Nationwide courier</div>
-                    <div className="option-sub">1–3 days, insured transit</div>
-                  </div>
-                  <div className="option-price">฿1,500</div>
-                </label>
-              </div>
-            </div>
           </div>
         </div>
 
-        {/* Order summary */}
-        <aside className="cart-right">
+        {/* Order summary (aligned with first booking card) */}
+        <aside className="cart-right" style={{ alignSelf: 'flex-start', marginTop: SUMMARY_TOP_OFFSET_PX }}>
           <div className="summary-card">
             <h2>Order Summary</h2>
 
@@ -375,7 +337,7 @@ export default function Booking() {
 
             <div className="summary-row">
               <span>Delivery</span>
-              <span>฿{deliveryFee.toLocaleString()}</span>
+              <span>฿{deliveryTotal.toLocaleString()}</span>
             </div>
 
             <div className="summary-divider" />

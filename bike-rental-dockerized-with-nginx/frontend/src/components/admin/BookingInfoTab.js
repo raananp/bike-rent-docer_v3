@@ -18,14 +18,16 @@ function statusColor(s) {
   }
 }
 
-function deriveOverall(passportStatus, licenseStatus) {
-  const s1 = (passportStatus || '').toLowerCase();
-  const s2 = (licenseStatus  || '').toLowerCase();
-  if (s1 === 'failed' || s2 === 'failed') return 'failed';
-  if (s1 === 'pending' || s2 === 'pending') return 'pending';
-  if (s1 === 'skipped' && s2 === 'skipped') return 'skipped';
-  return 'passed';
-}
+const deliveryLabel = (loc) => {
+  switch (loc) {
+    case 'office_pattaya':   return 'Pickup (Pattaya)';
+    case 'delivery_pattaya': return 'Delivery (Pattaya)';
+    case 'bangkok':          return 'Bangkok';
+    case 'phuket':           return 'Phuket';
+    case 'chiang_mai':       return 'Chiang Mai';
+    default:                 return loc || '—';
+  }
+};
 
 export default function BookingInfoTab() {
   const [bookings, setBookings]   = useState([]);
@@ -69,19 +71,10 @@ export default function BookingInfoTab() {
     .sort((a, b) => {
       const valA = a[sortConfig.key];
       const valB = b[sortConfig.key];
-      const toComp = (v) => {
-        if (v == null) return '';
-        if (typeof v === 'string') {
-          // try to parse dates in ISO
-          const t = Date.parse(v);
-          return isNaN(t) ? v : t;
-        }
-        if (v instanceof Date) return v.getTime();
-        return v;
-      };
-      const aVal = toComp(valA);
-      const bVal = toComp(valB);
-      return sortConfig.direction === 'asc' ? (aVal > bVal ? 1 : -1) : (aVal < bVal ? 1 : -1);
+      const aVal = valA instanceof Date ? valA.getTime() : (typeof valA === 'string' ? valA : String(valA ?? ''));
+      const bVal = valB instanceof Date ? valB.getTime() : (typeof valB === 'string' ? valB : String(valB ?? ''));
+      if (sortConfig.direction === 'asc') return aVal > bVal ? 1 : -1;
+      return aVal < bVal ? 1 : -1;
     });
 
   return (
@@ -120,6 +113,11 @@ export default function BookingInfoTab() {
             <TableCell sx={{ color: 'white' }}>Days</TableCell>
             <TableCell sx={{ color: 'white' }}>Insurance</TableCell>
             <TableCell sx={{ color: 'white' }}>Total (฿)</TableCell>
+
+            {/* NEW: Consent + Delivery */}
+            <TableCell sx={{ color: 'white' }}>Consent</TableCell>
+            <TableCell sx={{ color: 'white' }}>Delivery</TableCell>
+
             <TableCell sx={{ color: 'white' }}>Passport</TableCell>
             <TableCell sx={{ color: 'white' }}>License</TableCell>
             <TableCell sx={{ color: 'white' }}>Passport Status</TableCell>
@@ -131,17 +129,13 @@ export default function BookingInfoTab() {
 
         <TableBody>
           {sortedBookings.map((b) => {
-            // ✅ read from the backend structure
-            const passObj = b.verification?.passport || {};
-            const licObj  = b.verification?.license  || {};
-            let passportStatus = passObj.status;
-            let licenseStatus  = licObj.status;
-
-            // fallback: if no verification yet but file exists, show pending
-            if (!passportStatus) passportStatus = b.passportSignedUrl ? 'pending' : 'skipped';
-            if (!licenseStatus)  licenseStatus  = b.licenseSignedUrl  ? 'pending' : 'skipped';
-
-            const overall = b.verification?.status || deriveOverall(passportStatus, licenseStatus);
+            const passportStatus = b?.verification?.passport?.status ?? (b.passportSignedUrl ? 'pending' : 'skipped');
+            const licenseStatus  = b?.verification?.license?.status  ?? (b.licenseSignedUrl  ? 'pending' : 'skipped');
+            const overall =
+              (passportStatus === 'failed' || licenseStatus === 'failed') ? 'failed'
+              : (passportStatus === 'pending' || licenseStatus === 'pending') ? 'pending'
+              : (passportStatus === 'skipped' && licenseStatus === 'skipped') ? 'skipped'
+              : 'passed';
 
             return (
               <TableRow key={b._id}>
@@ -152,6 +146,20 @@ export default function BookingInfoTab() {
                 <TableCell sx={{ color: 'white' }}>{b.numberOfDays}</TableCell>
                 <TableCell sx={{ color: 'white' }}>{b.insurance ? 'Yes' : 'No'}</TableCell>
                 <TableCell sx={{ color: 'white' }}>฿{b.totalPrice}</TableCell>
+
+                {/* Consent */}
+                <TableCell sx={{ color: 'white' }}>
+                  <Chip
+                    size="small"
+                    label={b.consentGiven ? 'Agreed' : 'Missing'}
+                    color={b.consentGiven ? 'success' : 'error'}
+                  />
+                </TableCell>
+
+                {/* Delivery */}
+                <TableCell sx={{ color: 'white' }}>
+                  {deliveryLabel(b.deliveryLocation)}{typeof b.deliveryFee === 'number' ? ` (฿${b.deliveryFee})` : ''}
+                </TableCell>
 
                 <TableCell sx={{ color: 'white' }}>
                   {b.passportSignedUrl
@@ -165,19 +173,13 @@ export default function BookingInfoTab() {
                 </TableCell>
 
                 <TableCell sx={{ color: 'white' }}>
-                  <Tooltip title={passObj.reason || '—'}>
-                    <Chip size="small" label={passportStatus} color={statusColor(passportStatus)} />
-                  </Tooltip>
+                  <Chip size="small" label={passportStatus} color={statusColor(passportStatus)} />
                 </TableCell>
                 <TableCell sx={{ color: 'white' }}>
-                  <Tooltip title={licObj.reason || '—'}>
-                    <Chip size="small" label={licenseStatus} color={statusColor(licenseStatus)} />
-                  </Tooltip>
+                  <Chip size="small" label={licenseStatus} color={statusColor(licenseStatus)} />
                 </TableCell>
                 <TableCell sx={{ color: 'white' }}>
-                  <Tooltip title={b.verification?.updatedAt ? new Date(b.verification.updatedAt).toLocaleString() : ''}>
-                    <Chip size="small" label={overall} color={statusColor(overall)} />
-                  </Tooltip>
+                  <Chip size="small" label={overall} color={statusColor(overall)} />
                 </TableCell>
 
                 <TableCell align="right" sx={{ color: 'white' }}>
