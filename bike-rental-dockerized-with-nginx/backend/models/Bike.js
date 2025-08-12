@@ -9,6 +9,8 @@ const bikeSchema = new mongoose.Schema({
   perDay: { type: Number, required: true },
   perWeek: { type: Number, required: true },
   perMonth: { type: Number, required: true },
+  year: { type: Number },
+  licensePlate: { type: String },
   imageUrl: { type: String }, // Field for storing uploaded image URL
   type: {
     type: String,

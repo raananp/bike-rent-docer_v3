@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   Box, Typography, Grid, FormControl, InputLabel, Select,
   MenuItem, TextField, Button, Table, TableHead, TableRow,
@@ -12,7 +12,15 @@ import { getBikes, addBike, deleteBike } from '../../utils/api';
 
 function ManageBikeTab() {
   const [bikeForm, setBikeForm] = useState({
-    name: '', modelYear: '', km: '', perDay: '', perWeek: '', perMonth: '', type: ''
+    name: '',
+    modelYear: '',
+    year: '',            // NEW
+    licensePlate: '',    // NEW
+    km: '',
+    perDay: '',
+    perWeek: '',
+    perMonth: '',
+    type: ''
   });
   const [imageFile, setImageFile] = useState(null);
   const [bikeList, setBikeList] = useState([]);
@@ -41,7 +49,7 @@ function ManageBikeTab() {
 
   const handleBrandChange = (e) => {
     const name = e.target.value;
-    setBikeForm({ ...bikeForm, name, modelYear: '' }); // reset model when brand changes
+    setBikeForm((p) => ({ ...p, name, modelYear: '' })); // reset model when brand changes
   };
 
   const handleImageChange = (e) => {
@@ -64,8 +72,8 @@ function ManageBikeTab() {
   };
 
   const handleAddBike = async () => {
-    // basic validation
-    const required = ['name', 'modelYear', 'type', 'km', 'perDay', 'perWeek', 'perMonth'];
+    // basic validation (now includes year & licensePlate)
+    const required = ['name', 'modelYear', 'type', 'year', 'licensePlate', 'km', 'perDay', 'perWeek', 'perMonth'];
     for (const k of required) {
       if (!String(bikeForm[k]).trim()) {
         setStatusMessage(`❌ Please fill the "${k}" field.`);
@@ -84,7 +92,10 @@ function ManageBikeTab() {
 
       await addBike(formData);
 
-      setBikeForm({ name: '', modelYear: '', km: '', perDay: '', perWeek: '', perMonth: '', type: '' });
+      setBikeForm({
+        name: '', modelYear: '', year: '', licensePlate: '',
+        km: '', perDay: '', perWeek: '', perMonth: '', type: ''
+      });
       setImageFile(null);
       setStatusMessage('✅ Bike added successfully!');
       await refreshBikes();
@@ -104,7 +115,6 @@ function ManageBikeTab() {
       setStatusMessage('');
       setErrorMessage('');
       await deleteBike(id);
-      // optimistic UI
       setBikeList((prev) => prev.filter((b) => b._id !== id));
       setStatusMessage('✅ Bike deleted!');
     } catch (e) {
@@ -120,13 +130,22 @@ function ManageBikeTab() {
     }
   };
 
-  const whiteField = {
-    '& label': { color: 'white' },
-    '& .MuiInputBase-input': { color: 'white' },
-    '& .MuiOutlinedInput-notchedOutline': { borderColor: '#2e7d32' },
-    '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: '#66bb6a' },
-    '&.Mui-focused .MuiOutlinedInput-notchedOutline': { borderColor: '#66bb6a' }
+  // Underline style for TextField/Select (variant="standard")
+  const underlineField = {
+    '& label': { color: '#cfd8dc' },
+    '& .MuiInputBase-root': { color: '#fff' },
+    '& .MuiInput-underline:before': { borderBottomColor: '#3a3a3a' },
+    '& .MuiInput-underline:hover:before': { borderBottomColor: '#66bb6a' },
+    '& .MuiInput-underline:after': { borderBottomColor: '#66bb6a' },
+    '& .MuiSvgIcon-root': { color: '#fff' },
   };
+
+  // years 1965–2025
+  const years = useMemo(() => {
+    const arr = [];
+    for (let y = 2025; y >= 1965; y--) arr.push(y);
+    return arr;
+  }, []);
 
   return (
     <Box sx={{ mt: 3 }}>
@@ -158,6 +177,8 @@ function ManageBikeTab() {
                       <TableRow sx={{ '& th': { color: '#cfd8dc', backgroundColor: '#1f1f1f' } }}>
                         <TableCell>Name</TableCell>
                         <TableCell>Model</TableCell>
+                        <TableCell>Year</TableCell>            {/* NEW */}
+                        <TableCell>Plate</TableCell>           {/* NEW */}
                         <TableCell>Type</TableCell>
                         <TableCell>KM</TableCell>
                         <TableCell>฿/Day</TableCell>
@@ -174,6 +195,8 @@ function ManageBikeTab() {
                           <TableRow key={b._id} hover sx={{ '& td': { color: 'white' } }}>
                             <TableCell>{b.name}</TableCell>
                             <TableCell>{b.modelYear}</TableCell>
+                            <TableCell>{b.year ?? '-'}</TableCell>                 {/* NEW */}
+                            <TableCell>{b.licensePlate || '-'}</TableCell>        {/* NEW */}
                             <TableCell>{b.type}</TableCell>
                             <TableCell>{b.km}</TableCell>
                             <TableCell>{b.perDay}</TableCell>
@@ -214,7 +237,7 @@ function ManageBikeTab() {
           </Card>
         </Grid>
 
-        {/* RIGHT — Add New Bike (35%) with requested layout */}
+        {/* RIGHT — Add New Bike (35%) compact, underline inputs */}
         <Grid item xs={12} md={4.2}>
           <Card
             sx={{
@@ -226,19 +249,17 @@ function ManageBikeTab() {
           >
             <CardHeader
               title={<Typography variant="h6" sx={{ color: 'white' }}>Add New Bike</Typography>}
-              sx={{ borderBottom: '1px solid #2a2a2a' }}
+              sx={{ borderBottom: '1px solid #2a2a2a', py: 1.5 }}
             />
-            <CardContent>
-              <Grid container spacing={2}>
-                {/* Row 1: Brand + Model */}
+            <CardContent sx={{ pt: 2, pb: 2 }}>
+              <Grid container spacing={1.5}>
+                {/* Row 1: Brand + Model (underline) */}
                 <Grid item xs={12} md={6}>
-                  <FormControl fullWidth>
-                    <InputLabel sx={{ color: 'white' }}>Brand</InputLabel>
+                  <FormControl fullWidth variant="standard" sx={underlineField}>
+                    <InputLabel>Brand</InputLabel>
                     <Select
                       value={bikeForm.name}
                       onChange={handleBrandChange}
-                      label="Brand"
-                      sx={whiteField}
                     >
                       {Object.keys(bikeOptions).map((brand) => (
                         <MenuItem key={brand} value={brand}>{brand}</MenuItem>
@@ -247,13 +268,11 @@ function ManageBikeTab() {
                   </FormControl>
                 </Grid>
                 <Grid item xs={12} md={6}>
-                  <FormControl fullWidth>
-                    <InputLabel sx={{ color: 'white' }}>Model</InputLabel>
+                  <FormControl fullWidth variant="standard" sx={underlineField}>
+                    <InputLabel>Model</InputLabel>
                     <Select
                       value={bikeForm.modelYear}
                       onChange={(e) => setBikeForm({ ...bikeForm, modelYear: e.target.value })}
-                      label="Model"
-                      sx={whiteField}
                     >
                       {(bikeOptions[bikeForm.name] || []).map((model) => (
                         <MenuItem key={model} value={model}>{model}</MenuItem>
@@ -262,15 +281,13 @@ function ManageBikeTab() {
                   </FormControl>
                 </Grid>
 
-                {/* Row 2: Bike Type + KM */}
+                {/* Row 2: Bike Type + KM (underline) */}
                 <Grid item xs={12} md={6}>
-                  <FormControl fullWidth>
-                    <InputLabel sx={{ color: 'white' }}>Bike Type</InputLabel>
+                  <FormControl fullWidth variant="standard" sx={underlineField}>
+                    <InputLabel>Bike Type</InputLabel>
                     <Select
                       value={bikeForm.type}
                       onChange={(e) => setBikeForm({ ...bikeForm, type: e.target.value })}
-                      label="Bike Type"
-                      sx={whiteField}
                     >
                       <MenuItem value="Speed Bike">Speed Bike</MenuItem>
                       <MenuItem value="Cruiser">Cruiser</MenuItem>
@@ -281,25 +298,52 @@ function ManageBikeTab() {
                 <Grid item xs={12} md={6}>
                   <TextField
                     fullWidth
-                    variant="outlined"
+                    variant="standard"
                     label="KM"
                     value={bikeForm.km}
                     onChange={(e) => setBikeForm({ ...bikeForm, km: e.target.value })}
-                    sx={whiteField}
+                    sx={underlineField}
                     type="number"
                     inputProps={{ min: 0 }}
                   />
                 </Grid>
 
-                {/* Row 3: Prices (3 columns) */}
+                {/* Row 3: Year + License Plate (underline) */}
+                <Grid item xs={12} md={6}>
+                  <FormControl fullWidth variant="standard" sx={underlineField}>
+                    <InputLabel>Year</InputLabel>
+                    <Select
+                      value={bikeForm.year}
+                      onChange={(e) => setBikeForm({ ...bikeForm, year: e.target.value })}
+                      MenuProps={{ PaperProps: { style: { maxHeight: 300 } } }}
+                    >
+                      {years.map((y) => (
+                        <MenuItem key={y} value={y}>{y}</MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
+                </Grid>
+                <Grid item xs={12} md={6}>
+                  <TextField
+                    fullWidth
+                    variant="standard"
+                    label="License Plate"
+                    value={bikeForm.licensePlate}
+                    onChange={(e) => setBikeForm({ ...bikeForm, licensePlate: e.target.value })}
+                    sx={underlineField}
+                    placeholder="e.g., 1กก-1234"
+                  />
+                </Grid>
+
+                {/* Row 4: Prices (3 columns, underline) */}
                 <Grid item xs={12} md={4}>
                   <TextField
                     fullWidth
-                    variant="outlined"
+                    variant="standard"
                     label="Per Day"
                     value={bikeForm.perDay}
                     onChange={(e) => setBikeForm({ ...bikeForm, perDay: e.target.value })}
-                    sx={whiteField}
+                    sx={underlineField}
                     type="number"
                     inputProps={{ min: 0 }}
                     InputProps={{ startAdornment: <InputAdornment position="start">฿</InputAdornment> }}
@@ -308,11 +352,11 @@ function ManageBikeTab() {
                 <Grid item xs={12} md={4}>
                   <TextField
                     fullWidth
-                    variant="outlined"
+                    variant="standard"
                     label="Per Week"
                     value={bikeForm.perWeek}
                     onChange={(e) => setBikeForm({ ...bikeForm, perWeek: e.target.value })}
-                    sx={whiteField}
+                    sx={underlineField}
                     type="number"
                     inputProps={{ min: 0 }}
                     InputProps={{ startAdornment: <InputAdornment position="start">฿</InputAdornment> }}
@@ -321,18 +365,18 @@ function ManageBikeTab() {
                 <Grid item xs={12} md={4}>
                   <TextField
                     fullWidth
-                    variant="outlined"
+                    variant="standard"
                     label="Per Month"
                     value={bikeForm.perMonth}
                     onChange={(e) => setBikeForm({ ...bikeForm, perMonth: e.target.value })}
-                    sx={whiteField}
+                    sx={underlineField}
                     type="number"
                     inputProps={{ min: 0 }}
                     InputProps={{ startAdornment: <InputAdornment position="start">฿</InputAdornment> }}
                   />
                 </Grid>
 
-                {/* Row 4: Upload image (alone) */}
+                {/* Row 5: Upload image (alone) */}
                 <Grid item xs={12}>
                   <Button
                     variant="outlined"

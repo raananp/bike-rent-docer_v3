@@ -114,6 +114,8 @@ router.post('/', upload.single('imageFile'), async (req, res) => {
     const {
       name,
       modelYear,
+      year,
+      licensePlate,
       km,
       perDay,
       perWeek,
@@ -125,6 +127,8 @@ router.post('/', upload.single('imageFile'), async (req, res) => {
     const bike = new Bike({
       name: String(name ?? '').trim(),
       modelYear: String(modelYear ?? '').trim(), // <-- STRING
+      year: year ? Number(year) : undefined,
+      licensePlate: (licensePlate || '').trim(),
       km: String(km ?? '').trim(),               // <-- STRING
       perDay: Number(perDay ?? 0),               // <-- NUMBER
       perWeek: Number(perWeek ?? 0),             // <-- NUMBER
