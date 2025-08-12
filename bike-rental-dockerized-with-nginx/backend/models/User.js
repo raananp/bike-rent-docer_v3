@@ -11,6 +11,10 @@ const userSchema = new mongoose.Schema({
     enum: ['admin', 'user', 'Basic'],
     default: 'user',
   },
+  emailVerified: { type: Boolean, default: false },
+  mfaEnabled:    { type: Boolean, default: false },
+  mfaSecret:     { type: String },         // base32 secret for TOTP
+  mfaBackupCodes:{ type: [String], default: [] }, // hashed strings
 });
 
 // Hash password before save

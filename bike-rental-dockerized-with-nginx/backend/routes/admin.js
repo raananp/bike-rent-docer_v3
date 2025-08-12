@@ -158,4 +158,23 @@ router.patch('/users/:id/role', async (req, res) => {
   }
 });
 
+// DELETE /api/admin/users/:id
+router.delete('/users/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // Optional: prevent self-delete or require admin role here
+    // if (req.user.id === id) return res.status(400).json({ error: 'Cannot delete yourself' });
+
+    const deleted = await User.findByIdAndDelete(id);
+    if (!deleted) return res.status(404).json({ error: 'User not found' });
+
+    // 204 No Content or 200 with payload — your choice
+    return res.status(204).send();
+  } catch (err) {
+    console.error('Delete user error:', err);
+    return res.status(500).json({ error: 'Failed to delete user' });
+  }
+});
+
 module.exports = router;

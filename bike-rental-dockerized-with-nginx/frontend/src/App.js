@@ -13,6 +13,7 @@ import SignUp from './pages/SignUp';
 import Navbar from './components/Navbar';
 import ProtectedRoute from './components/ProtectedRoute';
 import { AuthProvider, AuthContext } from './context/AuthContext';
+import VerifyEmail from './pages/VerifyEmail';
 
 function AppRoutes() {
   const location = useLocation();
@@ -25,6 +26,7 @@ function AppRoutes() {
       <Routes location={location} key={location.pathname}>
         <Route path="/" element={<Home />} />
         <Route path="/bikes" element={<Bikes />} />
+        <Route path="/verify-email" element={<VerifyEmail />} />
 
         {/* 🔒 Booking requires any logged-in user */}
         <Route

@@ -1,17 +1,8 @@
+// 📁 frontend/src/pages/Booking.js
 import React, { useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import './Booking.css';
-
-// Safe fetch helper that won't crash on HTML error pages
-async function safeJsonFetch(url, options = {}) {
-  const res = await fetch(url, options);
-  const ct = res.headers.get('content-type') || '';
-  const text = await res.text();
-  if (!res.ok) {
-    const snippet = text.slice(0, 300);
-    throw new Error(`HTTP ${res.status}: ${snippet}`);
-  }
-  return ct.includes('application/json') ? JSON.parse(text) : text;
-}
+import { getMyBookings, getBikes } from '../utils/api'; // adjust path if this file lives elsewhere
 
 // Price helper: compute base + insurance from rates and days
 function computePrice(days, insurance, rates) {
@@ -62,9 +53,20 @@ function deliveryLabel(code) {
 }
 
 export default function Booking() {
+  const navigate = useNavigate();
   const [bookings, setBookings] = useState([]);
   const [bikesData, setBikesData] = useState([]);
   const [statusMessage, setStatusMessage] = useState('');
+
+  // If there’s no token at all, nudge to sign in (avoids spamming 401s)
+  useEffect(() => {
+    const t = localStorage.getItem('token');
+    if (!t) {
+      setStatusMessage('Please sign in to view your bookings.');
+      // optional redirect:
+      // navigate('/signin');
+    }
+  }, [navigate]);
 
   // Map for quick bike rate lookup: "Name Year" -> {perDay, perWeek, perMonth}
   const bikeRateMap = useMemo(() => {
@@ -76,14 +78,12 @@ export default function Booking() {
     return m;
   }, [bikesData]);
 
-  // Load ONLY current user’s bookings
+  // Load ONLY current user’s bookings (via utils/api → adds Authorization header)
   const fetchBookings = async () => {
     try {
-      const token = localStorage.getItem('token');
-      const data = await safeJsonFetch('/api/bookings/mine', {
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
-      });
+      const data = await getMyBookings();
       setBookings(Array.isArray(data) ? data : []);
+      setStatusMessage('');
     } catch (err) {
       console.error('Failed to load my bookings:', err);
       setStatusMessage('❌ Could not load your bookings. Please try again.');
@@ -91,9 +91,9 @@ export default function Booking() {
     }
   };
 
-  const fetchBikes = async () => {
+  const fetchBikesData = async () => {
     try {
-      const data = await safeJsonFetch('/api/bikes');
+      const data = await getBikes();
       setBikesData(Array.isArray(data) ? data : []);
     } catch (err) {
       console.error('Failed to load bikes', err);
@@ -103,7 +103,7 @@ export default function Booking() {
 
   useEffect(() => {
     fetchBookings();
-    fetchBikes();
+    fetchBikesData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -154,18 +154,19 @@ export default function Booking() {
   }, [bookings, bikeRateMap]);
 
   // Totals (delivery is now per-booking, coming from backend)
-  const subtotal = useMemo(() => {
-    return bookingsWithTotals.reduce((acc, b) => acc + (Number(b.__finalTotal) || 0), 0);
-  }, [bookingsWithTotals]);
+  const subtotal = useMemo(
+    () => bookingsWithTotals.reduce((acc, b) => acc + (Number(b.__finalTotal) || 0), 0),
+    [bookingsWithTotals]
+  );
 
-  const deliveryTotal = useMemo(() => {
-    return bookingsWithTotals.reduce((acc, b) => acc + (Number(b.deliveryFee) || 0), 0);
-  }, [bookingsWithTotals]);
+  const deliveryTotal = useMemo(
+    () => bookingsWithTotals.reduce((acc, b) => acc + (Number(b.deliveryFee) || 0), 0),
+    [bookingsWithTotals]
+  );
 
   const grandTotal = subtotal + deliveryTotal;
 
-  // small offset so the summary card lines up with the first booking card (under the page title)
-  const SUMMARY_TOP_OFFSET_PX = 24; // adjust if you want tighter/looser alignment
+  const SUMMARY_TOP_OFFSET_PX = 24;
 
   return (
     <div className="cart-page">
@@ -181,8 +182,7 @@ export default function Booking() {
             </div>
           ) : (
             <ul className="cart-items">
-              {bookingsWithTotals.map((b, idx) => {
-                // verification status for display
+              {bookingsWithTotals.map((b) => {
                 const licStatus  = b?.verification?.license?.status  ?? (b.licenseSignedUrl  ? 'pending' : 'skipped');
                 const licReason  = b?.verification?.license?.reason  ?? '';
                 const passStatus = b?.verification?.passport?.status ?? (b.passportSignedUrl ? 'pending' : 'skipped');
@@ -259,7 +259,6 @@ export default function Booking() {
                           </div>
                         )}
 
-                        {/* Delivery per booking */}
                         <div className="meta-row">
                           <span className="meta-label">Pickup / Delivery</span>
                           <span className="meta-value">
@@ -268,7 +267,6 @@ export default function Booking() {
                         </div>
                       </div>
 
-                      {/* Files */}
                       <div className="item-files">
                         <div className="file-pill">
                           {b.licenseSignedUrl ? (
@@ -286,7 +284,6 @@ export default function Booking() {
                         </div>
                       </div>
 
-                      {/* Verification badges */}
                       <div className="verification-status">
                         <div className="ver-row-title">🪪 Document Verification</div>
                         <div className="ver-badges">
@@ -308,7 +305,6 @@ export default function Booking() {
             </ul>
           )}
 
-          {/* Info panels (Delivery section removed as requested) */}
           <div className="info-panels">
             <div className="info-card">
               <h3>Insurance Options</h3>
@@ -325,8 +321,7 @@ export default function Booking() {
           </div>
         </div>
 
-        {/* Order summary (aligned with first booking card) */}
-        <aside className="cart-right" style={{ alignSelf: 'flex-start', marginTop: SUMMARY_TOP_OFFSET_PX }}>
+        <aside className="cart-right" style={{ alignSelf: 'flex-start', marginTop: 24 }}>
           <div className="summary-card">
             <h2>Order Summary</h2>
 
@@ -344,7 +339,7 @@ export default function Booking() {
 
             <div className="summary-row total">
               <span>Total</span>
-              <span>฿{grandTotal.toLocaleString()}</span>
+              <span>฿{(subtotal + deliveryTotal).toLocaleString()}</span>
             </div>
 
             <button

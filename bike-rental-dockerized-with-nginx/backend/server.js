@@ -2,6 +2,8 @@ require('dotenv').config();
 const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
+const cookieParser = require('cookie-parser');
+
 // const path = require('path'); // not used when behind nginx
 
 const bookingsRoute = require('./routes/bookings');
@@ -19,6 +21,7 @@ app.set('trust proxy', 1);
 /** CORS + JSON body parsing (FormData uploads still go through multer in routes) */
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));
+app.use(cookieParser());
 
 /** Health check (handy for testing nginx->backend reachability) */
 app.get('/api/health', (_req, res) => res.json({ ok: true }));
