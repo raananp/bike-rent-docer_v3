@@ -5,6 +5,7 @@ import { BrowserRouter } from 'react-router-dom';
 import { CssBaseline, GlobalStyles } from '@mui/material';
 
 const root = ReactDOM.createRoot(document.getElementById('root'));
+
 root.render(
   <BrowserRouter>
     <CssBaseline />
@@ -19,13 +20,8 @@ root.render(
           overflowX: 'hidden',
           fontFamily: 'Roboto, sans-serif',
         },
-        '*': {
-          boxSizing: 'border-box',
-        },
-        a: {
-          textDecoration: 'none',
-          color: 'inherit',
-        },
+        '*': { boxSizing: 'border-box' },
+        a: { textDecoration: 'none', color: 'inherit' },
       }}
     />
     <App />

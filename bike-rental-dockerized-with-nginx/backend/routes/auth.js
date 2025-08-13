@@ -1,6 +1,5 @@
 // backend/routes/auth.js
 const express = require('express');
-const bcrypt = require('bcrypt');
 const crypto = require('crypto');
 const jwt = require('jsonwebtoken');
 const { authenticator } = require('otplib');
@@ -9,6 +8,9 @@ const qrcode = require('qrcode');
 const User = require('../models/User');
 const EmailToken = require('../models/EmailToken');
 const { sendVerificationEmail } = require('../utils/mailer');
+
+// ✅ Use shared middleware; DO NOT redeclare it in this file
+const requireAuth = require('../middleware/auth');
 
 const router = express.Router();
 
@@ -20,18 +22,28 @@ function signAccess(user) {
     { expiresIn: '15m' }
   );
 }
+
 function signRefresh(user) {
   return jwt.sign({ id: user._id }, process.env.JWT_REFRESH_SECRET, { expiresIn: '7d' });
 }
+
+/**
+ * HttpOnly refresh cookie
+ * - secure: true on HTTPS (set COOKIE_SECURE=true in prod)
+ * - sameSite: 'lax' is fine for same-site setups behind nginx
+ * - path: '/' so the browser always sends it to /api/auth/refresh (and logout clears it)
+ */
 function setRefreshCookie(res, token) {
   res.cookie('rt', token, {
     httpOnly: true,
-    secure: process.env.COOKIE_SECURE === 'true',
-    sameSite: 'lax',
-    path: '/api/auth',
+    secure: false,           // <-- HTTP requires false
+    sameSite: 'lax',         // <-- same-site works when frontend+backend share host
+    path: '/',               // <-- keep at root so /api/auth/refresh gets it
     maxAge: 7 * 24 * 60 * 60 * 1000,
   });
 }
+
+
 function toSafeUser(u) {
   if (!u) return null;
   return {
@@ -41,24 +53,6 @@ function toSafeUser(u) {
     firstName: u.firstName || '',
     lastName: u.lastName || '',
   };
-}
-
-/* --------------------- Auth middleware (bearer) --------------------- */
-function requireAuth(req, res, next) {
-  try {
-    const auth = req.headers.authorization || '';
-    const token = auth.startsWith('Bearer ') ? auth.slice(7) : null;
-    if (!token) return res.status(401).json({ error: 'Unauthorized' });
-    const payload = jwt.verify(token, process.env.JWT_SECRET);
-    req.user = {
-      id: payload.id || payload.sub,
-      email: payload.email,
-      role: payload.role || 'user',
-    };
-    next();
-  } catch {
-    return res.status(401).json({ error: 'Unauthorized' });
-  }
 }
 
 /* ----------------------------- SIGNUP ----------------------------- */
@@ -72,7 +66,7 @@ router.post('/signup', async (req, res) => {
     const exists = await User.findOne({ email });
     if (exists) return res.status(409).json({ error: 'Email already in use' });
 
-    // password hashed in User model pre('save')
+    // password is hashed by user model pre('save')
     const user = await User.create({
       firstName, lastName, email, password,
       role: 'user', emailVerified: false, mfaEnabled: false,
@@ -112,20 +106,17 @@ router.get('/verify-email', async (req, res) => {
       user.emailVerified = true;
       await user.save();
     }
-
     await doc.deleteOne();
 
-    // Auto-login payload so frontend can set context immediately
-    const accessToken = signAccess(user);
+    // Issue tokens and set refresh cookie
+    const accessToken  = signAccess(user);
     const refreshToken = signRefresh(user);
-    // (Optional) set cookie:
-    // setRefreshCookie(res, refreshToken);
+    setRefreshCookie(res, refreshToken);
 
-    return res.json({
+    res.json({
       ok: true,
       message: 'Email verified!',
       token: accessToken,
-      refreshToken,
       user: toSafeUser(user),
     });
   } catch (e) {
@@ -188,9 +179,9 @@ router.post('/refresh', async (req, res) => {
 router.post('/logout', (req, res) => {
   res.clearCookie('rt', {
     httpOnly: true,
-    secure: process.env.COOKIE_SECURE === 'true',
+    secure: false,           // <-- must match above
     sameSite: 'lax',
-    path: '/api/auth',
+    path: '/',               // <-- must match above
   });
   res.json({ ok: true });
 });
@@ -268,6 +259,29 @@ router.post('/mfa/verify', async (req, res) => {
   } catch (e) {
     console.error('mfa verify', e);
     return res.status(400).json({ error: 'MFA verification failed' });
+  }
+});
+
+/* --------------------------- CHANGE PASSWORD --------------------------- */
+router.patch('/change-password', requireAuth, async (req, res) => {
+  try {
+    const { currentPassword = '', newPassword = '' } = req.body || {};
+    if (!currentPassword || !newPassword) {
+      return res.status(400).json({ error: 'Missing currentPassword or newPassword' });
+    }
+
+    const user = await User.findById(req.user.id);
+    if (!user) return res.status(404).json({ error: 'User not found' });
+
+    const ok = await user.comparePassword(currentPassword);
+    if (!ok) return res.status(401).json({ error: 'Current password incorrect' });
+
+    user.password = newPassword; // pre('save') in model will hash it
+    await user.save();
+    res.json({ ok: true });
+  } catch (e) {
+    console.error('change-password', e);
+    res.status(500).json({ error: 'Failed to change password' });
   }
 });
 

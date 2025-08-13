@@ -54,7 +54,7 @@ if (typeof window !== 'undefined') {
     if (e.key === LOGOUT_FLAG) {
       _signOutLocalOnly(); // react in this tab
       // Optional redirect:
-      // window.location.href = '/login';
+      // window.location.href = '/signin';
     }
   });
 }
@@ -86,7 +86,7 @@ export function stopIdleLogout() {
 
 // =============== Sign out / Refresh ===============
 async function refreshAccessToken() {
-  // OPTIONAL: only works if your backend exposes /api/auth/refresh
+  // Works with backend /api/auth/refresh (httpOnly cookie "rt")
   try {
     const res = await fetch('/api/auth/refresh', { method: 'POST', credentials: 'include' });
     if (!res.ok) return null;
@@ -108,10 +108,10 @@ function _signOutLocalOnly() {
 export async function signOut() {
   _signOutLocalOnly();
   broadcastLogout();
-  // Optional: tell server to revoke refresh token
+  // Optional: tell server to clear refresh cookie
   try { await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' }); } catch {}
   // Optional redirect
-  // window.location.href = '/login';
+  // window.location.href = '/signin';
 }
 
 // =============== Safe fetch with auto‑refresh ===============
@@ -168,18 +168,57 @@ async function toJsonOrThrow(res) {
   }
 }
 
-// ======== PUBLIC HELPERS YOU ALREADY USE ========
+// ======== PUBLIC HELPERS ========
 
 // Call once in your app bootstrap (e.g., in App.jsx useEffect)
 // startIdleLogout({ idleMs: 5 * 60 * 1000 });
 
-// --- admin stats ---
+// --- profile / account ---
+export const getProfile = async () => {
+  const res = await fetchWithAuth('/api/user/me');
+  return toJsonOrThrow(res);
+};
+
+export const changePassword = async (currentPassword, newPassword) => {
+  const res = await fetchWithAuth('/api/auth/change-password', {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ currentPassword, newPassword }),
+  });
+  return toJsonOrThrow(res);
+};
+
+export const privacyPurgeDocs = async () => {
+  const res = await fetchWithAuth('/api/user/privacy/purge-docs', { method: 'POST' });
+  return toJsonOrThrow(res);
+};
+
+// --- MFA (protected) ---
+export const mfaSetup = async () => {
+  const res = await fetchWithAuth('/api/auth/mfa/setup', { method: 'POST' });
+  return toJsonOrThrow(res); // => { otpauth, qrDataUrl }
+};
+
+export const mfaConfirm = async (code) => {
+  const res = await fetchWithAuth('/api/auth/mfa/confirm', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ code }),
+  });
+  return toJsonOrThrow(res); // => { ok: true }
+};
+
+export const mfaDisable = async () => {
+  const res = await fetchWithAuth('/api/auth/mfa/disable', { method: 'POST' });
+  return toJsonOrThrow(res); // => { ok: true }
+};
+
+// --- admin stats/users ---
 export const getStats = async () => {
   const res = await fetchWithAuth('/api/admin/bookings/stats');
   return toJsonOrThrow(res);
 };
 
-// --- admin users ---
 export const getUsers = async () => {
   const res = await fetchWithAuth('/api/admin/users');
   return toJsonOrThrow(res);
@@ -195,12 +234,9 @@ export const updateUserRole = async (id, role) => {
 };
 
 export const deleteUser = async (id) => {
-     const res = await fetch(`/api/admin/users/${id}`, {
-       method: 'DELETE',
-       headers: { ...authHeaders() },
-     });
-     return toJsonOrThrow(res);
-  };
+  const res = await fetchWithAuth(`/api/admin/users/${id}`, { method: 'DELETE' });
+  return toJsonOrThrow(res);
+};
 
 // --- bookings ---
 export const getBookings = async () => {
@@ -218,7 +254,7 @@ export const deleteBooking = async (id) => {
   return toJsonOrThrow(res);
 };
 
-// ✅ NEW: update verification
+// ✅ update verification
 export const updateBookingVerification = async (id, payload) => {
   const res = await fetchWithAuth(`/api/bookings/${id}/verification`, {
     method: 'PATCH',
@@ -254,3 +290,9 @@ export function setAuthToken(token) {
   // reset idle timer after a successful login
   resetIdleTimer();
 }
+
+// --- admin analytics summary ---
+export const getAnalyticsSummary = async () => {
+    const res = await fetchWithAuth('/api/analytics/summary');
+    return toJsonOrThrow(res);
+  };

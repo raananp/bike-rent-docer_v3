@@ -10,6 +10,8 @@ import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import AdminPanelSettingsIcon from '@mui/icons-material/AdminPanelSettings';
 import PersonOutlineIcon from '@mui/icons-material/PersonOutline';
 import RefreshIcon from '@mui/icons-material/Refresh';
+import VerifiedUserIcon from '@mui/icons-material/VerifiedUser';
+import LockOpenIcon from '@mui/icons-material/LockOpen';
 import { getUsers, updateUserRole, deleteUser } from '../../utils/api';
 
 const chipForRole = (role) =>
@@ -17,12 +19,34 @@ const chipForRole = (role) =>
     ? <Chip size="small" icon={<AdminPanelSettingsIcon />} label="Admin" color="secondary" variant="filled" />
     : <Chip size="small" icon={<PersonOutlineIcon />} label="User" color="default" variant="outlined" />;
 
+const chipForMfa = (enabled) =>
+  enabled
+    ? <Chip size="small" icon={<VerifiedUserIcon />} label="Enabled" color="success" variant="filled" />
+    : <Chip size="small" icon={<LockOpenIcon />} label="Off" sx={{ color: '#ddd', borderColor: 'rgba(255,255,255,0.2)' }} variant="outlined" />;
+
 function getComparator(order, orderBy) {
   return (a, b) => {
-    const va = (a?.[orderBy] ?? '').toString().toLowerCase();
-    const vb = (b?.[orderBy] ?? '').toString().toLowerCase();
-    if (va < vb) return order === 'asc' ? -1 : 1;
-    if (va > vb) return order === 'asc' ? 1 : -1;
+    let va = a?.[orderBy];
+    let vb = b?.[orderBy];
+
+    // Normalize undefined/null
+    if (va == null) va = '';
+    if (vb == null) vb = '';
+
+    // For booleans (like mfaEnabled), sort false < true
+    if (orderBy === 'mfaEnabled') {
+      const na = va ? 1 : 0;
+      const nb = vb ? 1 : 0;
+      if (na < nb) return order === 'asc' ? -1 : 1;
+      if (na > nb) return order === 'asc' ? 1 : -1;
+      return 0;
+    }
+
+    // Default string compare
+    const sa = va.toString().toLowerCase();
+    const sb = vb.toString().toLowerCase();
+    if (sa < sb) return order === 'asc' ? -1 : 1;
+    if (sa > sb) return order === 'asc' ? 1 : -1;
     return 0;
   };
 }
@@ -83,7 +107,7 @@ export default function UserPermissionsTab() {
     let arr = users;
     if (q) {
       arr = arr.filter(u =>
-        `${u.firstName || ''} ${u.lastName || ''} ${u.email} ${u.role}`
+        `${u.firstName || ''} ${u.lastName || ''} ${u.email} ${u.role} ${u.mfaEnabled ? 'enabled' : 'off'}`
           .toLowerCase()
           .includes(q)
       );
@@ -141,7 +165,7 @@ export default function UserPermissionsTab() {
         <CardContent sx={{ pt: 1.5 }}>
           <Box sx={{ mb: 2 }}>
             <TextField
-              placeholder="Search by name, email, or role…"
+              placeholder="Search by name, email, role, or MFA…"
               variant="outlined"
               size="small"
               fullWidth
@@ -169,7 +193,7 @@ export default function UserPermissionsTab() {
               stickyHeader
               size={dense ? 'small' : 'medium'}
               sx={{
-                minWidth: 860,
+                minWidth: 980,
                 '& .MuiTableCell-stickyHeader': {
                   bgcolor: 'rgba(30,30,30,0.9)',
                   color: 'white',
@@ -228,6 +252,21 @@ export default function UserPermissionsTab() {
                       Role
                     </TableSortLabel>
                   </TableCell>
+
+                  {/* NEW: MFA column */}
+                  <TableCell sortDirection={orderBy === 'mfaEnabled' ? order : false}>
+                    <TableSortLabel
+                      active={orderBy === 'mfaEnabled'}
+                      direction={orderBy === 'mfaEnabled' ? order : 'asc'}
+                      onClick={() => handleRequestSort('mfaEnabled')}
+                      sx={{ color: 'white',
+                        '&.Mui-active': { color: 'white' },
+                        '& .MuiTableSortLabel-icon': { color: 'white !important' } }}
+                    >
+                      MFA
+                    </TableSortLabel>
+                  </TableCell>
+
                   <TableCell sx={{ color: 'white', minWidth: 220 }}>Change Role</TableCell>
                   <TableCell sx={{ color: 'white', width: 80 }} align="right">Actions</TableCell>
                 </TableRow>
@@ -236,13 +275,13 @@ export default function UserPermissionsTab() {
               <TableBody>
                 {loading ? (
                   <TableRow>
-                    <TableCell colSpan={7} align="center" sx={{ color: '#bbb', py: 6 }}>
+                    <TableCell colSpan={8} align="center" sx={{ color: '#bbb', py: 6 }}>
                       <CircularProgress size={28} sx={{ color: '#90ee90' }} />
                     </TableCell>
                   </TableRow>
                 ) : paged.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={7} align="center" sx={{ color: '#bbb', py: 6 }}>
+                    <TableCell colSpan={8} align="center" sx={{ color: '#bbb', py: 6 }}>
                       No users found.
                     </TableCell>
                   </TableRow>
@@ -276,6 +315,12 @@ export default function UserPermissionsTab() {
                       <TableCell sx={{ color: 'white' }}>
                         {chipForRole(u.role)}
                       </TableCell>
+
+                      {/* NEW: MFA cell */}
+                      <TableCell sx={{ color: 'white' }}>
+                        {chipForMfa(Boolean(u.mfaEnabled))}
+                      </TableCell>
+
                       <TableCell>
                         <Stack direction="row" spacing={1} alignItems="center">
                           <Select

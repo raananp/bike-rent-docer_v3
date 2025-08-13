@@ -3,6 +3,8 @@ import React, { createContext, useState, useEffect, useMemo } from 'react';
 import axios from 'axios';
 import jwt_decode from 'jwt-decode';
 
+axios.defaults.withCredentials = true; // ✅ send/receive cookies (rt) with axios
+
 export const AuthContext = createContext();
 
 /** Decode JWT safely and check exp */
@@ -20,8 +22,7 @@ const decodeTokenSafe = (token) => {
 /** Persist session to localStorage + axios header */
 const saveSession = (token, userObj) => {
   localStorage.setItem('token', token);
-  // Store exactly what we’ll read later (don’t rely on JWT having names)
-  localStorage.setItem('user', JSON.stringify(userObj || {}));
+  localStorage.setItem('user', JSON.stringify(userObj || {})); // we read this later
   axios.defaults.headers.common.Authorization = `Bearer ${token}`;
 };
 
@@ -33,65 +34,45 @@ const clearSession = () => {
 };
 
 export const AuthProvider = ({ children }) => {
-  const [user, setUser]     = useState(null);
+  const [user, setUser]   = useState(null);
   const [loading, setLoading] = useState(true);
 
-  // Try to restore session on mount: prefer stored user; if token expired, try refresh
+  // OPTION A (recommended): don't refresh on mount — just restore local session
   useEffect(() => {
-    (async () => {
-      const token = localStorage.getItem('token');
-      const storedUser = (() => {
-        try { return JSON.parse(localStorage.getItem('user') || 'null'); }
-        catch { return null; }
-      })();
+    const token = localStorage.getItem('token');
+    const storedUser = (() => {
+      try { return JSON.parse(localStorage.getItem('user') || 'null'); }
+      catch { return null; }
+    })();
 
-      const decoded = decodeTokenSafe(token);
-
-      if (token && decoded && storedUser?.id) {
-        // Happy path: token valid and user present
-        saveSession(token, storedUser);
-        setUser({ ...storedUser, token });
-        setLoading(false);
-        return;
-      }
-
-      // Fallback: try refresh endpoint (httpOnly cookie ‘rt’)
-      try {
-        const res = await axios.post('/api/auth/refresh', {}, { withCredentials: true });
-        const newToken = res.data?.token;
-        const apiUser  = res.data?.user; // {id,email,role,firstName,lastName}
-        if (newToken && apiUser) {
-          saveSession(newToken, apiUser);
-          setUser({ ...apiUser, token: newToken });
-          setLoading(false);
-          return;
-        }
-      } catch {
-        // ignore
-      }
-
-      // No valid session
+    const decoded = decodeTokenSafe(token);
+    if (token && decoded && storedUser?.id) {
+      saveSession(token, storedUser);
+      setUser({ ...storedUser, token });
+    } else {
       clearSession();
       setUser(null);
-      setLoading(false);
-    })();
+    }
+    setLoading(false);
   }, []);
 
-  /** LOGIN: use backend user object (names aren’t guaranteed in JWT) */
+  // If you REALLY want refresh-on-mount, replace the effect above with your previous one,
+  // but ensure the backend returns: { token, user } from /api/auth/refresh.
+
+  /** LOGIN: prefer backend user object so names show in navbar */
   const login = async (email, password) => {
     const res = await axios.post('/api/auth/login', { email, password });
-    const token  = res.data?.token;
-    const apiUser = res.data?.user; // ✅ backend now returns this
+    const token   = res.data?.token;
+    const apiUser = res.data?.user; // 👈 make sure backend sends {id,email,role,firstName,lastName}
 
     if (!token) throw new Error('Invalid login token');
 
-    // If backend didn’t send user for some reason, derive minimal from JWT
     const decoded = decodeTokenSafe(token) || {};
     const safeUser = apiUser || {
       id: decoded.id || decoded.sub || '',
       email: decoded.email || email,
       role: decoded.role || 'user',
-      firstName: '', // names won’t be in JWT unless you added them
+      firstName: '',
       lastName : '',
     };
 
@@ -99,41 +80,34 @@ export const AuthProvider = ({ children }) => {
     setUser({ ...safeUser, token });
   };
 
-  /**
-   * Optionally accept a user object (e.g., from /verify-email or custom flows).
-   * If omitted, we’ll derive minimal fields from the token.
-   */
+  /** Accept token (e.g., from /verify-email) + optional user override */
   const loginWithToken = (token, userOverride) => {
     if (!token) throw new Error('Missing token');
-
     const decoded = decodeTokenSafe(token) || {};
-    const safeUser = userOverride || {
+    const stored = (() => {
+      try { return JSON.parse(localStorage.getItem('user') || 'null'); } catch { return null; }
+    })();
+    const safeUser = userOverride || stored || {
       id: decoded.id || decoded.sub || '',
       email: decoded.email || '',
       role: decoded.role || 'user',
-      firstName: userOverride?.firstName || '',
-      lastName : userOverride?.lastName  || '',
+      firstName: '',
+      lastName : '',
     };
-
     if (!safeUser.id) {
-      clearSession();
-      setUser(null);
+      clearSession(); setUser(null);
       throw new Error('Invalid or expired token');
     }
-
     saveSession(token, safeUser);
     setUser({ ...safeUser, token });
   };
 
   const logout = async () => {
-    try {
-      await axios.post('/api/auth/logout', {}, { withCredentials: true });
-    } catch { /* ignore */ }
+    try { await axios.post('/api/auth/logout', {}, { withCredentials: true }); } catch {}
     clearSession();
     setUser(null);
   };
 
-  // Handy header for fetch/axios in components
   const authHeader = useMemo(
     () => (user?.token ? { Authorization: `Bearer ${user.token}` } : {}),
     [user?.token]

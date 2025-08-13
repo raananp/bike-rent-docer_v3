@@ -8,7 +8,11 @@ import TwoWheelerIcon from '@mui/icons-material/TwoWheeler';
 import ShieldOutlinedIcon from '@mui/icons-material/ShieldOutlined';
 import LocalShippingOutlinedIcon from '@mui/icons-material/LocalShippingOutlined';
 import AttachMoneyOutlinedIcon from '@mui/icons-material/AttachMoneyOutlined';
+import BarChartIcon from '@mui/icons-material/BarChart';
+import PeopleAltOutlinedIcon from '@mui/icons-material/PeopleAltOutlined';
+
 import { getStats } from '../../utils/api';
+import { getAnalyticsSummary } from '../../utils/api'; // 👈 add this helper
 
 function prettyBaht(n) {
   const num = Number(n || 0);
@@ -36,24 +40,36 @@ export default function DashboardTab() {
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => { fetchStats(); }, []);
+  const [a, setA] = useState({ totalPageViews: 0, uniqueVisitors: 0, topBikes: [] });
+  const [loadingA, setLoadingA] = useState(true);
 
-  const fetchStats = async () => {
-    try {
-      setLoading(true);
-      const data = await getStats();
-      setStats(data || {});
-    } finally {
-      setLoading(false);
-    }
-  };
+  useEffect(() => {
+    (async () => {
+      try {
+        setLoading(true);
+        const data = await getStats();
+        setStats(data || {});
+      } finally {
+        setLoading(false);
+      }
+    })();
+
+    (async () => {
+      try {
+        setLoadingA(true);
+        const data = await getAnalyticsSummary();
+        setA(data || { totalPageViews: 0, uniqueVisitors: 0, topBikes: [] });
+      } finally {
+        setLoadingA(false);
+      }
+    })();
+  }, []);
 
   // Normalize profitByBike to an array of { bike, profit, bookings }
   const profitEntries = useMemo(() => {
     const pbb = stats?.profitByBike;
     if (!pbb) return [];
 
-    // New shape (array of objects)
     if (Array.isArray(pbb)) {
       return pbb
         .map(r => ({
@@ -64,7 +80,6 @@ export default function DashboardTab() {
         .sort((a, b) => b.profit - a.profit);
     }
 
-    // Old shape (object map: { "Bike Name": number })
     return Object.entries(pbb)
       .map(([bike, profit]) => ({ bike, profit: Number(profit || 0), bookings: undefined }))
       .sort((a, b) => b.profit - a.profit);
@@ -72,12 +87,13 @@ export default function DashboardTab() {
 
   const maxProfit = useMemo(() => profitEntries[0]?.profit || 0, [profitEntries]);
 
-  // Optional derived: total revenue fallback if backend didn’t send it
   const totalRevenue = stats?.totalRevenue ?? stats?.totalProfit ?? 0;
+
+  const maxOpens = a?.topBikes?.[0]?.opens || 0;
 
   return (
     <Grid container spacing={2} sx={{ mt: 3 }}>
-      {/* KPI row */}
+      {/* KPI row (existing) */}
       <Grid item xs={12} sm={6} md={3}>
         <KpiCard
           title="Total Bookings"
@@ -104,6 +120,24 @@ export default function DashboardTab() {
           title="Active Bookings"
           value={!loading ? stats?.activeBookings : null}
           icon={<AssignmentTurnedInIcon sx={{ color: '#b2fab4' }} />}
+        />
+      </Grid>
+
+      {/* NEW: Analytics KPIs */}
+      <Grid item xs={12} sm={6} md={3}>
+        <KpiCard
+          title="Total Visits"
+          value={!loadingA ? a.totalPageViews ?? 0 : null}
+          icon={<BarChartIcon sx={{ color: '#b2fab4' }} />}
+          sub="All page views"
+        />
+      </Grid>
+      <Grid item xs={12} sm={6} md={3}>
+        <KpiCard
+          title="Unique Visitors"
+          value={!loadingA ? a.uniqueVisitors ?? 0 : null}
+          icon={<PeopleAltOutlinedIcon sx={{ color: '#b2fab4' }} />}
+          sub="Based on sessionId"
         />
       </Grid>
 
@@ -221,6 +255,33 @@ export default function DashboardTab() {
               </Box>
             ) : (
               <Typography sx={{ color: '#90a4ae' }}>No data yet.</Typography>
+            )}
+          </CardContent>
+        </Card>
+      </Grid>
+
+      {/* NEW: Most Opened Bikes */}
+      <Grid item xs={12}>
+        <Card sx={{ bgcolor: 'rgba(255,255,255,0.04)', borderRadius: 2, border: '1px solid rgba(255,255,255,0.08)' }}>
+          <CardContent>
+            <Typography variant="h6" sx={{ color: 'white', mb: 2 }}>Most Opened Bikes</Typography>
+            {loadingA ? (
+              <Typography sx={{ color: '#90a4ae' }}>Loading…</Typography>
+            ) : (a.topBikes || []).length ? (
+              (a.topBikes || []).map(({ bikeId, bikeName, opens }) => {
+                const pct = maxOpens ? (opens / maxOpens) * 100 : 0;
+                return (
+                  <Box key={bikeId || bikeName} sx={{ mb: 1.5 }}>
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
+                      <Typography sx={{ color: '#e0e0e0' }}>{bikeName || 'Unknown Bike'}</Typography>
+                      <Typography sx={{ color: 'lightgreen' }}>{opens}</Typography>
+                    </Box>
+                    <LinearProgress variant="determinate" value={Math.min(100, pct)} sx={{ height: 8, borderRadius: 5 }} />
+                  </Box>
+                );
+              })
+            ) : (
+              <Typography sx={{ color: '#90a4ae' }}>No events yet.</Typography>
             )}
           </CardContent>
         </Card>

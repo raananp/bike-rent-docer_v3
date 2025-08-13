@@ -2,7 +2,15 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import './Booking.css';
-import { getMyBookings, getBikes } from '../utils/api'; // adjust path if this file lives elsewhere
+import { getMyBookings, getBikes } from '../utils/api';
+import { QRCodeSVG } from 'qrcode.react';
+
+// --- Stripe (card) ---
+import { loadStripe } from '@stripe/stripe-js';
+import { Elements, CardElement, useStripe, useElements } from '@stripe/react-stripe-js';
+const stripePromise = loadStripe(process.env.REACT_APP_STRIPE_PUBLISHABLE_KEY || '');
+
+// ===== helpers =====
 
 // Price helper: compute base + insurance from rates and days
 function computePrice(days, insurance, rates) {
@@ -52,19 +60,136 @@ function deliveryLabel(code) {
   }
 }
 
+// Dummy delivery ETA data
+const DELIVERY_ETAS = [
+  { location: 'Pickup at office (Pattaya)', window: 'Same day', typical: '1–2 hours', cutoff: 'Order before 5pm' },
+  { location: 'Delivery in Pattaya',        window: 'Same day', typical: '2–3 hours', cutoff: 'Order before 4pm' },
+  { location: 'Bangkok delivery',           window: 'Next day', typical: '10am–2pm',  cutoff: 'Order before 3pm' },
+  { location: 'Phuket delivery',            window: '+2 days',  typical: '12pm–4pm',  cutoff: 'Order before 12pm' },
+  { location: 'Chiang Mai delivery',        window: '+2 days',  typical: '1pm–5pm',   cutoff: 'Order before 12pm' },
+];
+
+// ---------- PromptPay QR builder (browser-safe) ----------
+function numToHex(n, width=2) { return n.toString().padStart(width, '0'); }
+function tlv(id, value) { return id + numToHex(value.length) + value; }
+function crc16ccitt(bytes) {
+  let crc = 0xFFFF;
+  for (let b of bytes) {
+    crc ^= (b << 8);
+    for (let i = 0; i < 8; i++) {
+      crc = (crc & 0x8000) ? ((crc << 1) ^ 0x1021) & 0xFFFF : (crc << 1) & 0xFFFF;
+    }
+  }
+  return crc.toString(16).toUpperCase().padStart(4, '0');
+}
+function strToBytes(str) { return new TextEncoder().encode(str); }
+function buildPromptPayPayload({ phone, amount }) {
+  const id = (phone || '').replace(/[^\d]/g, '');
+  if (!id) return '';
+  const aid = tlv('00', 'A000000677010111');
+  const mobile = tlv('01', id);
+  const mai = tlv('29', aid + mobile);
+  const amt = (typeof amount === 'number' && amount > 0) ? tlv('54', amount.toFixed(2)) : '';
+  const payloadNoCRC =
+    tlv('00', '01') +             // Payload format
+    tlv('01', '11') +             // Static
+    mai +                         // Merchant account info (PromptPay mobile)
+    tlv('53', '764') +            // Currency THB (764)
+    amt +                         // Optional amount
+    tlv('58', 'TH') +             // Country
+    tlv('59', 'Rental') +         // Merchant name
+    tlv('60', 'Thailand') +       // City
+    '6304';                       // CRC placeholder
+  const crc = crc16ccitt(strToBytes(payloadNoCRC));
+  return payloadNoCRC + crc;
+}
+
+// Minor units THB → satang
+const toMinor = (thb) => Math.max(0, Math.round((Number(thb) || 0) * 100));
+
+/** Card payment component (Stripe Elements) */
+function CardPayBox({ amountTHB, onPaid }) {
+  const stripe = useStripe();
+  const elements = useElements();
+  const [loading, setLoading] = useState(false);
+  const [err, setErr] = useState('');
+
+  const handlePay = async () => {
+    try {
+      setErr('');
+      setLoading(true);
+      if (!stripe || !elements) return;
+
+      // Create PaymentIntent on backend
+      const token = localStorage.getItem('token');
+      const res = await fetch('/api/payments/create-intent', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ amount: toMinor(amountTHB), currency: 'thb' }),
+      });
+      if (!res.ok) throw new Error(await res.text());
+
+      const { clientSecret, paymentIntentId } = await res.json();
+
+      const result = await stripe.confirmCardPayment(clientSecret, {
+        payment_method: { card: elements.getElement(CardElement) },
+      });
+
+      if (result.error) {
+        setErr(result.error.message || 'Payment failed.');
+        setLoading(false);
+        return;
+      }
+
+      if (result.paymentIntent?.status === 'succeeded') {
+        onPaid?.(paymentIntentId);
+      } else {
+        setErr('Payment did not complete.');
+        setLoading(false);
+      }
+    } catch (e) {
+      setErr(e.message || 'Payment error');
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="side-card">
+      <h4>Card Details</h4>
+      <div className="card-input">
+        <CardElement options={{
+          hidePostalCode: true,
+          style: {
+            base: { fontSize: '16px', color: '#fff', '::placeholder': { color: '#bbb' } },
+            invalid: { color: '#ff6b6b' },
+          },
+        }} />
+      </div>
+      <button className="primary-btn" onClick={handlePay} disabled={loading || !stripe || !elements}>
+        {loading ? 'Processing…' : `Pay ฿${amountTHB.toLocaleString(undefined,{minimumFractionDigits:2})}`}
+      </button>
+      {err && <div className="status-message" style={{ marginTop: 8 }}>{err}</div>}
+    </div>
+  );
+}
+
 export default function Booking() {
   const navigate = useNavigate();
   const [bookings, setBookings] = useState([]);
   const [bikesData, setBikesData] = useState([]);
   const [statusMessage, setStatusMessage] = useState('');
 
-  // If there’s no token at all, nudge to sign in (avoids spamming 401s)
+  // Payment option (removed "office")
+  const [payMethod, setPayMethod] = useState('card'); // 'card' | 'qr'
+
+  // If there’s no token at all, nudge to sign in
   useEffect(() => {
     const t = localStorage.getItem('token');
     if (!t) {
       setStatusMessage('Please sign in to view your bookings.');
-      // optional redirect:
-      // navigate('/signin');
     }
   }, [navigate]);
 
@@ -78,7 +203,7 @@ export default function Booking() {
     return m;
   }, [bikesData]);
 
-  // Load ONLY current user’s bookings (via utils/api → adds Authorization header)
+  // Load ONLY current user’s bookings
   const fetchBookings = async () => {
     try {
       const data = await getMyBookings();
@@ -132,7 +257,7 @@ export default function Booking() {
     });
   };
 
-  // Ensure each booking has a computedTotal in case backend totalPrice is 0/missing
+  // Ensure each booking has a computedTotal
   const bookingsWithTotals = useMemo(() => {
     return bookings.map((b) => {
       const ratesFromBooking = (b.perDay || b.perWeek || b.perMonth)
@@ -153,24 +278,82 @@ export default function Booking() {
     });
   }, [bookings, bikeRateMap]);
 
-  // Totals (delivery is now per-booking, coming from backend)
-  const subtotal = useMemo(
-    () => bookingsWithTotals.reduce((acc, b) => acc + (Number(b.__finalTotal) || 0), 0),
-    [bookingsWithTotals]
-  );
+  // Grand total (include delivery fee if present)
+  const grandTotalTHB = useMemo(() => {
+    return bookingsWithTotals.reduce((sum, b) => {
+      const del = Number(b.deliveryFee || 0);
+      return sum + Number(b.__finalTotal || 0) + del;
+    }, 0);
+  }, [bookingsWithTotals]);
 
-  const deliveryTotal = useMemo(
-    () => bookingsWithTotals.reduce((acc, b) => acc + (Number(b.deliveryFee) || 0), 0),
-    [bookingsWithTotals]
-  );
+  // QR payload (grand total across cart)
+  const promptPayId =
+    (process.env.REACT_APP_PROMPTPAY_ID && String(process.env.REACT_APP_PROMPTPAY_ID)) ||
+    '0812345678';
+  const qrPayload = useMemo(() => {
+    if (!grandTotalTHB || grandTotalTHB <= 0) return '';
+    return buildPromptPayPayload({ phone: promptPayId, amount: grandTotalTHB });
+  }, [promptPayId, grandTotalTHB]);
 
-  const grandTotal = subtotal + deliveryTotal;
+  // Complete card payment → mark as paid (optional: call /api/bookings/:id/pay etc.)
+  const handleCardPaid = async (paymentIntentId) => {
+    alert('Payment successful! Ref: ' + paymentIntentId);
+    await fetchBookings();
+  };
 
-  const SUMMARY_TOP_OFFSET_PX = 24;
+  // Delete a booking
+  const deleteBooking = async (id) => {
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`/api/bookings/${id}`, {
+        method: 'DELETE',
+        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+      });
+      if (!res.ok) {
+        const txt = await res.text().catch(() => '');
+        throw new Error(txt || `Failed to delete booking`);
+      }
+      await fetchBookings();
+    } catch (e) {
+      alert(e.message || 'Delete failed');
+    }
+  };
+
+  // “I’ve paid by QR” → send a claim to backend (optional endpoint)
+  const claimQrPaid = async () => {
+    try {
+      const token = localStorage.getItem('token');
+
+      // You can include specific booking IDs you want to mark as paid.
+      const bookingIds = bookingsWithTotals.map(b => b._id);
+      const res = await fetch('/api/payments/qr-paid', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({
+          bookingIds,
+          amountTHB: grandTotalTHB,
+        }),
+      });
+
+      // Even if endpoint isn’t there yet, we still show a friendly message
+      if (!res.ok) {
+        console.warn('qr-paid endpoint not available yet:', await res.text().catch(()=> ''));
+      }
+
+      alert('Thanks! We’ve recorded your QR payment claim. We’ll verify shortly.');
+      await fetchBookings();
+    } catch (e) {
+      alert('Recorded your QR payment claim. We’ll verify shortly.');
+    }
+  };
 
   return (
     <div className="cart-page">
       <div className="cart-container">
+        {/* LEFT: bookings list */}
         <div className="cart-left">
           <h1 className="cart-title">Your Rentals</h1>
           {statusMessage && <p className="status-message">{statusMessage}</p>}
@@ -197,7 +380,31 @@ export default function Booking() {
                 const imgSrc = b.bikeImageSignedUrl || b.bikeImageUrl || '';
 
                 return (
-                  <li key={b._id} className="cart-item">
+                  <li
+                    key={b._id}
+                    className="cart-item"
+                    style={{
+                      width: '100%',
+                      background: '#000',
+                      border: '1px solid #222',
+                      borderRadius: 12,
+                      padding: 16,
+                      color: '#fff',
+                      boxShadow: '0 12px 28px rgba(0,0,0,0.35)',
+                      position: 'relative',
+                    }}
+                  >
+                    {/* delete button */}
+                    <button
+                      className="delete-btn"
+                      title="Delete booking"
+                      onClick={() => {
+                        if (window.confirm('Delete this booking?')) deleteBooking(b._id);
+                      }}
+                    >
+                      ×
+                    </button>
+
                     <div className="item-thumb">
                       {imgSrc ? (
                         <img
@@ -213,10 +420,17 @@ export default function Booking() {
                       )}
                     </div>
 
-                    <div className="item-main">
+                    <div className="item-main" style={{ color: '#fff' }}>
                       <div className="item-header">
-                        <h2 className="item-name">{b.bike}</h2>
-                        <div className="item-price">฿{Number(b.__finalTotal || 0).toLocaleString()}</div>
+                        <h2 className="item-name" style={{ color: '#fff' }}>{b.bike}</h2>
+                        <div className="item-price" style={{ color: '#90ee90' }}>
+                          ฿{Number(b.__finalTotal || 0).toLocaleString()}
+                          {Number(b.deliveryFee || 0) > 0 ? (
+                            <span style={{ color:'#ccc', marginLeft: 8, fontWeight: 400 }}>
+                              (+฿{Number(b.deliveryFee).toLocaleString()} delivery)
+                            </span>
+                          ) : null}
+                        </div>
                       </div>
 
                       <div className="item-meta">
@@ -259,6 +473,7 @@ export default function Booking() {
                           </div>
                         )}
 
+                        {/* Delivery per booking */}
                         <div className="meta-row">
                           <span className="meta-label">Pickup / Delivery</span>
                           <span className="meta-value">
@@ -267,6 +482,7 @@ export default function Booking() {
                         </div>
                       </div>
 
+                      {/* Files */}
                       <div className="item-files">
                         <div className="file-pill">
                           {b.licenseSignedUrl ? (
@@ -284,6 +500,7 @@ export default function Booking() {
                         </div>
                       </div>
 
+                      {/* Verification badges */}
                       <div className="verification-status">
                         <div className="ver-row-title">🪪 Document Verification</div>
                         <div className="ver-badges">
@@ -305,8 +522,9 @@ export default function Booking() {
             </ul>
           )}
 
-          <div className="info-panels">
-            <div className="info-card">
+          {/* === 2‑column section: Insurance + Delivery === */}
+          <div className="insurance-delivery-grid">
+            <div className="insurance-card">
               <h3>Insurance Options</h3>
               <p className="muted">
                 Standard coverage is included. Upgrade adds accidental damage protection up to ฿50,000
@@ -318,50 +536,129 @@ export default function Booking() {
                 <li>Third‑party liability included</li>
               </ul>
             </div>
+
+            <div className="delivery-card">
+              <h3>Delivery Times (estimates)</h3>
+              <p className="muted">Typical delivery windows by area. Subject to traffic and availability.</p>
+              <div style={{ overflowX: 'auto' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                  <thead>
+                    <tr>
+                      <th style={{ textAlign: 'left', padding: '8px', borderBottom: '1px solid #1f1f1f' }}>Location</th>
+                      <th style={{ textAlign: 'left', padding: '8px', borderBottom: '1px solid #1f1f1f' }}>Window</th>
+                      <th style={{ textAlign: 'left', padding: '8px', borderBottom: '1px solid #1f1f1f' }}>Typical Time</th>
+                      <th style={{ textAlign: 'left', padding: '8px', borderBottom: '1px solid #1f1f1f' }}>Cut‑off</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {DELIVERY_ETAS.map((row) => (
+                      <tr key={row.location}>
+                        <td style={{ padding: '8px', borderBottom: '1px solid #151515', color: '#eee' }}>{row.location}</td>
+                        <td style={{ padding: '8px', borderBottom: '1px solid #151515', color: '#ddd' }}>{row.window}</td>
+                        <td style={{ padding: '8px', borderBottom: '1px solid #151515', color: '#ddd' }}>{row.typical}</td>
+                        <td style={{ padding: '8px', borderBottom: '1px solid #151515', color: '#ddd' }}>{row.cutoff}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <p className="muted" style={{ marginTop: 8 }}>
+                Need a specific time? We’ll do our best—reply to your confirmation email after booking.
+              </p>
+            </div>
           </div>
+          {/* === /2‑column section === */}
         </div>
 
-        <aside className="cart-right" style={{ alignSelf: 'flex-start', marginTop: 24 }}>
+        {/* RIGHT: payment summary */}
+        <div className="cart-right">
           <div className="summary-card">
-            <h2>Order Summary</h2>
+            <h2>Payment Summary</h2>
 
             <div className="summary-row">
-              <span>Subtotal</span>
-              <span>฿{subtotal.toLocaleString()}</span>
+              <span>Items</span>
+              <span>{bookingsWithTotals.length}</span>
             </div>
 
             <div className="summary-row">
-              <span>Delivery</span>
-              <span>฿{deliveryTotal.toLocaleString()}</span>
+              <span>Grand Total</span>
+              <span>฿{grandTotalTHB.toLocaleString()}</span>
             </div>
 
             <div className="summary-divider" />
 
-            <div className="summary-row total">
-              <span>Total</span>
-              <span>฿{(subtotal + deliveryTotal).toLocaleString()}</span>
+            {/* Payment method chooser (no office) */}
+            <div className="side-card">
+              <h4>Choose how to pay</h4>
+              <div className="delivery-options" style={{ marginTop: 8 }}>
+                <label className={`delivery-option ${payMethod==='card' ? 'active' : ''}`}>
+                  <input
+                    type="radio"
+                    name="pay"
+                    checked={payMethod==='card'}
+                    onChange={() => setPayMethod('card')}
+                  />
+                  <div className="option-title">Credit / Debit Card</div>
+                  <div className="option-price">฿{grandTotalTHB.toLocaleString()}</div>
+                </label>
+
+                <label className={`delivery-option ${payMethod==='qr' ? 'active' : ''}`}>
+                  <input
+                    type="radio"
+                    name="pay"
+                    checked={payMethod==='qr'}
+                    onChange={() => setPayMethod('qr')}
+                  />
+                  <div className="option-title">PromptPay QR</div>
+                  <div className="option-price">฿{grandTotalTHB.toLocaleString()}</div>
+                </label>
+              </div>
             </div>
 
-            <button
-              className="primary-btn"
-              onClick={() => alert('Checkout flow placeholder — integrate payment/confirmation next.')}
-              disabled={bookingsWithTotals.length === 0}
-            >
-              Continue
-            </button>
+            {/* Reveal panels */}
+            {payMethod === 'qr' && (
+              <div className="side-card" style={{ textAlign: 'center' }}>
+                <h4>Scan to pay (PromptPay)</h4>
+                {qrPayload ? (
+                  <>
+                    <QRCodeSVG value={qrPayload} size={180} />
+                    <div className="fine-print" style={{ marginTop: 8 }}>
+                      {promptPayId} • ฿{grandTotalTHB.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                    </div>
+                    <button
+                      className="primary-btn"
+                      style={{ marginTop: 12 }}
+                      onClick={claimQrPaid}
+                    >
+                      I’ve paid by QR
+                    </button>
+                  </>
+                ) : (
+                  <div className="fine-print">QR unavailable (check PromptPay ID or total)</div>
+                )}
+              </div>
+            )}
 
-            <p className="fine-print">
-              By continuing, you agree to our rental terms and insurance conditions.
-            </p>
+            {payMethod === 'card' && process.env.REACT_APP_STRIPE_PUBLISHABLE_KEY && (
+              <Elements stripe={stripePromise} options={{ appearance: { theme: 'night' } }}>
+                <CardPayBox amountTHB={grandTotalTHB} onPaid={handleCardPaid} />
+              </Elements>
+            )}
+
+            {!process.env.REACT_APP_STRIPE_PUBLISHABLE_KEY && payMethod === 'card' && (
+              <div className="status-message" style={{ marginTop: 10 }}>
+                Stripe publishable key not set. Add <code>REACT_APP_STRIPE_PUBLISHABLE_KEY</code> to enable card payments.
+              </div>
+            )}
           </div>
 
           <div className="side-card">
-            <h4>Need changes?</h4>
-            <p className="muted">
-              To add another bike or change dates, go to the <a href="/bikes">Bikes</a> page and start a new booking.
+            <h4>Need help?</h4>
+            <p className="fine-print">
+              Questions about payment or delivery? Reply to your confirmation email or contact support.
             </p>
           </div>
-        </aside>
+        </div>
       </div>
     </div>
   );

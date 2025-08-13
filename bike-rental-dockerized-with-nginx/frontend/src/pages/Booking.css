@@ -1,16 +1,17 @@
-/* Page layout */
+/* ===== Page shell ===== */
 .cart-page {
-  padding: 100px 24px 40px;
+  padding: 24px;
   background: #121212;
   min-height: 100vh;
   color: #fff;
 }
 
+/* Two-column page layout */
 .cart-container {
   max-width: 1200px;
   margin: 0 auto;
   display: grid;
-  grid-template-columns: minmax(0, 1.6fr) minmax(280px, 0.9fr);
+  grid-template-columns: 1.8fr 1fr; /* left list + right payment summary */
   gap: 28px;
 }
 
@@ -20,7 +21,10 @@
   }
 }
 
-/* Left column */
+/* ===== Left column (bookings) ===== */
+.cart-left {}
+
+/* Title / messages */
 .cart-title {
   font-size: 28px;
   font-weight: 700;
@@ -35,8 +39,10 @@
   color: #ffb1b1;
 }
 
+/* Empty state */
 .cart-empty {
-  background: #1e1e1e;
+  background: #0b0b0b;
+  border: 1px solid #222;
   border-radius: 14px;
   padding: 24px;
 }
@@ -51,6 +57,7 @@
   text-decoration: none;
 }
 
+/* Bookings list */
 .cart-items {
   list-style: none;
   padding: 0;
@@ -60,13 +67,15 @@
 }
 
 .cart-item {
-  background: #1e1e1e;
+  background: #000;
+  border: 1px solid #222;
   border-radius: 14px;
   padding: 16px;
   display: grid;
   grid-template-columns: 120px 1fr;
   gap: 16px;
   align-items: start;
+  box-shadow: 0 12px 28px rgba(0,0,0,0.35);
 }
 
 @media (max-width: 560px) {
@@ -93,9 +102,7 @@
   font-size: 14px;
 }
 
-.item-main {
-  min-width: 0;
-}
+.item-main { min-width: 0; }
 
 .item-header {
   display: flex;
@@ -107,15 +114,17 @@
 .item-name {
   font-size: 18px;
   font-weight: 600;
+  color: #fff;
 }
 
 .item-price {
   font-weight: 700;
   font-size: 18px;
   white-space: nowrap;
+  color: #90ee90;
 }
 
-/* Alignment fix: two-column meta grid with fixed label width */
+/* Meta grid */
 .item-meta {
   margin-top: 8px;
   display: grid;
@@ -124,7 +133,7 @@
 
 .meta-row {
   display: grid;
-  grid-template-columns: 140px 1fr; /* fixed label width */
+  grid-template-columns: 140px 1fr;
   align-items: start;
   gap: 10px;
   color: #ddd;
@@ -137,25 +146,15 @@
   text-overflow: ellipsis;
 }
 
-.meta-label {
-  color: #b9b9b9;
-}
-
-.meta-value {
-  justify-self: end;
-  text-align: right;
-}
+.meta-label { color: #b9b9b9; }
+.meta-value { justify-self: end; text-align: right; }
 
 @media (max-width: 560px) {
-  .meta-row {
-    grid-template-columns: 1fr;
-  }
-  .meta-value {
-    justify-self: start;
-    text-align: left;
-  }
+  .meta-row { grid-template-columns: 1fr; }
+  .meta-value { justify-self: start; text-align: left; }
 }
 
+/* Files */
 .item-files {
   margin-top: 12px;
   display: flex;
@@ -164,7 +163,8 @@
 }
 
 .file-pill {
-  background: #2b2b2b;
+  background: #111;
+  border: 1px solid #222;
   padding: 6px 10px;
   border-radius: 999px;
   font-size: 13px;
@@ -175,135 +175,9 @@
   text-decoration: none;
 }
 
-.muted {
-  color: #aaa;
-}
+.muted { color: #aaa; }
 
-/* Info panels (left column) */
-.info-panels {
-  margin-top: 18px;
-  display: grid;
-  gap: 14px;
-}
-
-.info-card {
-  background: #1e1e1e;
-  border-radius: 14px;
-  padding: 16px;
-}
-
-.info-card h3 {
-  margin: 0 0 6px 0;
-}
-
-.bullets {
-  margin: 8px 0 0 16px;
-  color: #ddd;
-}
-
-/* Delivery options */
-.delivery-options {
-  display: grid;
-  gap: 10px;
-  margin-top: 10px;
-}
-
-.delivery-option {
-  display: grid;
-  grid-template-columns: 18px 1fr auto;
-  align-items: center;
-  gap: 10px;
-  padding: 10px;
-  border-radius: 10px;
-  background: #222;
-  border: 1px solid transparent;
-  cursor: pointer;
-}
-
-.delivery-option.active {
-  border-color: #4da3ff;
-  background: #232a33;
-}
-
-.option-title {
-  font-weight: 600;
-  line-height: 1.2;
-}
-
-.option-sub {
-  color: #aaa;
-  font-size: 13px;
-}
-
-.option-price {
-  font-weight: 700;
-  white-space: nowrap;
-}
-
-/* Right column (summary) */
-.cart-right {
-  display: grid;
-  gap: 14px;
-  height: max-content;
-}
-
-.summary-card, .side-card {
-  background: #1e1e1e;
-  border-radius: 14px;
-  padding: 16px;
-}
-
-.summary-card h2 {
-  margin: 0 0 12px 0;
-  font-size: 22px;
-  font-weight: 700;
-}
-
-.summary-row {
-  display: flex;
-  justify-content: space-between;
-  padding: 8px 0;
-  color: #eaeaea;
-}
-
-.summary-row.total {
-  font-size: 18px;
-  font-weight: 700;
-}
-
-.summary-divider {
-  border-top: 1px solid #2b2b2b;
-  margin: 8px 0;
-}
-
-.primary-btn {
-  margin-top: 10px;
-  width: 100%;
-  padding: 12px 14px;
-  background: #0a84ff;
-  border: none;
-  color: #fff;
-  font-weight: 600;
-  border-radius: 12px;
-  cursor: pointer;
-}
-
-.primary-btn:disabled {
-  background: #2b2b2b;
-  cursor: not-allowed;
-}
-
-.side-card h4 {
-  margin: 0 0 6px 0;
-}
-
-.fine-print {
-  color: #aaa;
-  font-size: 12px;
-  margin-top: 8px;
-}
-
-/* badges */
+/* Verification badges */
 .badge {
   display: inline-block;
   padding: 4px 8px;
@@ -323,3 +197,178 @@
 .verification-status { margin-top: 10px; }
 .ver-row-title { font-weight: 600; margin-bottom: 4px; }
 .ver-badges { display: flex; flex-wrap: wrap; }
+
+/* Info panels below list */
+.info-panels { margin-top: 18px; display: grid; gap: 14px; }
+
+/* Two-column info section (Insurance + Delivery) */
+.insurance-delivery-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+  margin-top: 18px;
+}
+
+@media (max-width: 768px) {
+  .insurance-delivery-grid { grid-template-columns: 1fr; }
+}
+
+.insurance-card,
+.delivery-card {
+  background: #000;
+  color: #fff;
+  border-radius: 14px;
+  padding: 16px;
+  border: 1px solid #222;
+  box-shadow: 0 10px 24px rgba(0,0,0,0.35);
+}
+
+.insurance-card h3,
+.delivery-card h3 {
+  margin: 0 0 8px 0;
+  color: #fff;
+}
+
+/* Delivery table */
+.delivery-card table { width: 100%; border-collapse: collapse; }
+.delivery-card th,
+.delivery-card td {
+  text-align: left;
+  padding: 8px;
+  border-bottom: 1px solid #1f1f1f;
+}
+.delivery-card td { color: #ddd; }
+.delivery-card td:first-child { color: #eee; }
+
+/* ===== Right column (payment summary) ===== */
+.cart-right { display: block; margin-top: 20%;}
+
+.summary-card,
+.side-card {
+  background: #1e1e1e;
+  border-radius: 14px;
+  padding: 16px;
+  border: 1px solid #2b2b2b;
+  box-shadow: 0 10px 24px rgba(0,0,0,0.35);
+}
+
+.summary-card h2 {
+  margin: 0 0 12px 0;
+  font-size: 22px;
+  font-weight: 700;
+  color: #fff;
+}
+
+.summary-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 8px 0;
+  color: #eaeaea;
+}
+
+.summary-row.total {
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.summary-divider {
+  border-top: 1px solid #2b2b2b;
+  margin: 12px 0;
+}
+
+.side-card h4 {
+  margin: 0 0 6px 0;
+  color: #fff;
+}
+
+/* Payment method tiles (reuse delivery-option styles) */
+.delivery-options {
+  display: grid;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.delivery-option {
+  display: grid;
+  grid-template-columns: 18px 1fr auto;
+  align-items: center;
+  gap: 10px;
+  padding: 10px;
+  border-radius: 10px;
+  background: #0b0b0b;
+  border: 1px solid transparent;
+  cursor: pointer;
+}
+
+.delivery-option input[type="radio"] {
+  margin: 0;
+}
+
+.delivery-option.active {
+  border-color: #4da3ff;
+  background: #0f1216;
+}
+
+.option-title { font-weight: 600; line-height: 1.2; color: #eaeaea; }
+.option-sub   { color: #aaa; font-size: 13px; }
+.option-price { font-weight: 700; white-space: nowrap; color: #eaeaea; }
+
+/* Buttons / inputs on right */
+.primary-btn {
+  margin-top: 10px;
+  width: 100%;
+  padding: 12px 14px;
+  background: #0a84ff;
+  border: none;
+  color: #fff;
+  font-weight: 600;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: filter .15s ease;
+}
+
+.primary-btn:hover { filter: brightness(1.1); }
+.primary-btn:disabled {
+  background: #2b2b2b;
+  cursor: not-allowed;
+}
+
+/* Stripe CardElement container */
+.card-input {
+  background: #0b0b0b;
+  border: 1px solid #222;
+  border-radius: 10px;
+  padding: 12px;
+  color: #fff;
+}
+
+/* Fine print */
+.fine-print {
+  color: #aaa;
+  font-size: 12px;
+  margin-top: 8px;
+  line-height: 1.5;
+}
+
+/* delete button on each booking card */
+.delete-btn {
+  position: absolute;
+  top: 8px;
+  right: 10px;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 1px solid #333;
+  background: #111;
+  color: #bbb;
+  cursor: pointer;
+  line-height: 24px;
+  text-align: center;
+  font-size: 18px;
+  transition: all .2s ease;
+}
+.delete-btn:hover {
+  color: #fff;
+  border-color: #555;
+  transform: scale(1.05);
+}

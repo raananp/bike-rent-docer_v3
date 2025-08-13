@@ -1,6 +1,8 @@
+// backend/routes/bookings.js
 const express = require('express');
 const multer = require('multer');
 const mime = require('mime-types');
+const mongoose = require('mongoose');
 const {
   S3Client, PutObjectCommand, GetObjectCommand,
 } = require('@aws-sdk/client-s3');
@@ -105,10 +107,11 @@ function extractS3Key(imageUrlOrKey = '') {
 
 /* ---------------------- Enrich bookings for UI ---------------------- */
 async function enrichBookings(bookings) {
-  const bikes = await Bike.find();
+  const bikes = await Bike.find().lean();
   const bikeMap = {};
   bikes.forEach((b) => {
     bikeMap[`${b.name} ${b.modelYear}`.trim()] = b;
+    if (b._id) bikeMap[b._id.toString()] = b;
   });
 
   return Promise.all(
@@ -119,7 +122,7 @@ async function enrichBookings(bookings) {
       if (b.passportFileUrl) result.passportSignedUrl = await signUrl(b.passportFileUrl);
 
       // also return a SIGNED image URL for the bike to avoid AccessDenied
-      const bike = bikeMap[b.bike];
+      const bike = bikeMap[b.bike] || bikeMap[b?.bike?._id?.toString?.()] || null;
       if (bike) {
         result.perDay = bike.perDay;
         result.perWeek = bike.perWeek;
@@ -229,7 +232,46 @@ function evaluateDocFromOCR(lines, expectedName) {
   };
 }
 
-/** Run Textract after save, store detailed reasons, and roll up overall status. */
+/* ---------------------- Doc-type classifier & enforcement ---------------------- */
+// Heuristic: detect passport MRZ (two long lines full of '<', often starts 'P<')
+function looksLikePassportMRZ(lines) {
+  const mrz = lines
+    .map(l => l.replace(/\s+/g, ''))
+    .filter(l => /^[A-Z0-9<]{25,}$/.test(l));
+  return mrz.length >= 2;
+}
+
+const PASSKEYS = [
+  'passport', 'passport no', 'document no', 'p<', 'international passport',
+  'kingdom of thailand', 'icao'
+];
+const LICENSEKEYS = [
+  'driving licence', 'driving license', 'driver licence', 'driver license',
+  'ใบอนุญาตขับรถ', 'department of land transport', 'dl no', 'licence no', 'license no'
+];
+
+function hasAnyKeyword(lines, keys) {
+  const joined = lines.join(' ').toLowerCase();
+  return keys.some(k => joined.includes(k));
+}
+
+/** Classify OCR text as 'passport' | 'license' | 'unknown' */
+function classifyDocTypeFromText(lines) {
+  if (looksLikePassportMRZ(lines)) return 'passport';
+
+  const hasPassportWords = hasAnyKeyword(lines, PASSKEYS);
+  const hasLicenseWords  = hasAnyKeyword(lines, LICENSEKEYS);
+
+  if (hasPassportWords && !hasLicenseWords) return 'passport';
+  if (hasLicenseWords && !hasPassportWords) return 'license';
+
+  const first = (lines[0] || '').trim().toUpperCase();
+  if (first.startsWith('P<')) return 'passport';
+
+  return 'unknown';
+}
+
+/** Run Textract after save, check identity + correct doc type per slot. */
 async function scheduleVerification(saved) {
   if (!textract) {
     console.log('[verify] skipped: textract disabled');
@@ -242,20 +284,46 @@ async function scheduleVerification(saved) {
       const expectedName = `${saved.firstName} ${saved.lastName}`.trim();
       const updates = { 'verification.updatedAt': new Date() };
 
-      const runOne = async (label, key) => {
+      /**
+       * Verify one doc slot with both identity fields AND type.
+       * @param {string} label      'license' | 'passport'
+       * @param {string} key        S3 key (or null)
+       * @param {('license'|'passport')} expectedType
+       */
+      const runOne = async (label, key, expectedType) => {
         if (!key) return { status: 'skipped', reason: 'No file' };
+
         try {
+          // 1) Try structured fields
           const out = await analyzeIdFromS3Key(key);
           const fields = out.IdentityDocuments?.[0]?.IdentityDocumentFields || [];
-          let result = evaluateDocFromAnalyzeID(fields, expectedName);
+          let result = evaluateDocFromAnalyzeID(fields, expectedName); // name/expiry
 
+          // 2) Pull OCR lines for type classification (and fallback)
+          let lines = [];
+          try {
+            lines = await detectTextLinesFromS3Key(key);
+          } catch (_) {}
+
+          // If name failed, try OCR fallback:
           if (result.status === 'failed' && /No name|mismatch/i.test(result.reason)) {
-            const lines = await detectTextLinesFromS3Key(key);
             const ocrRes = evaluateDocFromOCR(lines, expectedName);
             if (ocrRes.status === 'passed') result = ocrRes;
           }
 
-          console.log('[verify] %s booking=%s status=%s reason=%s', label, saved._id, result.status, result.reason);
+          // 3) Enforce doc type
+          const detectedType = classifyDocTypeFromText(lines);
+          if (detectedType !== 'unknown' && detectedType !== expectedType) {
+            return {
+              status: 'failed',
+              reason: `Wrong document type: expected "${expectedType}", detected "${detectedType}".`,
+            };
+          }
+
+          console.log(
+            '[verify] %s booking=%s status=%s reason=%s type=%s',
+            label, saved._id, result.status, result.reason, detectedType
+          );
           return result;
         } catch (e) {
           console.warn('[verify] %s error booking=%s %s', label, saved._id, e.message);
@@ -263,8 +331,8 @@ async function scheduleVerification(saved) {
         }
       };
 
-      const lic = await runOne('license',  saved.licenseFileUrl);
-      const pas = await runOne('passport', saved.passportFileUrl);
+      const lic = await runOne('license',  saved.licenseFileUrl,  'license');
+      const pas = await runOne('passport', saved.passportFileUrl, 'passport');
 
       updates['verification.license']  = lic;
       updates['verification.passport'] = pas;
@@ -284,6 +352,18 @@ async function scheduleVerification(saved) {
     }
   });
 }
+
+/* ---------------------- Overlap helpers (backend enforcement) ---------------------- */
+
+// We store bookings with `bike` as string "Name Year" in this build
+const sameBikeCriteria = (bikeFieldValue) => ({ bike: bikeFieldValue });
+
+// Overlap rule: existing.start < newEnd  AND  existing.end > newStart
+const overlapQuery = (bikeFieldValue, newStart, newEnd) => ({
+  ...sameBikeCriteria(bikeFieldValue),
+  startDateTime: { $lt: newEnd },
+  endDateTime:   { $gt: newStart },
+});
 
 /* ---------------------- Routes ---------------------- */
 
@@ -315,7 +395,9 @@ router.get('/mine', auth, async (req, res) => {
 // Poll a single booking's verification (owner/admin)
 router.get('/:id/verification', auth, async (req, res) => {
   try {
-    const b = await Booking.findById(req.params.id);
+    const { id } = req.params;
+    if (!mongoose.isValidObjectId(id)) return res.status(400).json({ error: 'Invalid id' });
+    const b = await Booking.findById(id);
     if (!b) return res.status(404).json({ error: 'Not found' });
     const isOwner = String(b.userId) === String(req.user.id);
     const isAdmin = req.user.role === 'admin';
@@ -327,28 +409,70 @@ router.get('/:id/verification', auth, async (req, res) => {
   }
 });
 
-// Create (requires auth + consent)
+// Create (requires auth + consent) with overlap + 2-hour buffer enforcement
 router.post('/', auth, upload, async (req, res) => {
   try {
     const {
       firstName, lastName, startDateTime, numberOfDays, bike,
       insurance, provideDocsInOffice, consentGiven, consentTextVersion, dataRetentionDays,
-
-      // NEW: delivery fields from client
       deliveryLocation = 'office_pattaya',
       deliveryFee = 0,
     } = req.body;
 
     if (!req.user?.email) return res.status(401).json({ error: 'Unauthorized' });
-    if (!['true', true, '1', 1].includes(consentGiven)) {
-      return res.status(400).json({ error: 'Consent is required to submit booking' });
-    }
+    // treat truthy variants as booleans
+        const provideInOffice = ['true', true, '1', 1, 'yes', 'on'].includes(provideDocsInOffice);
+        const consentOK = ['true', true, '1', 1, 'yes', 'on'].includes(consentGiven);
 
-    const days = parseInt(numberOfDays, 10);
+        // ⬇️ only require consent if NOT providing docs in office
+        if (!provideInOffice && !consentOK) {
+          return res.status(400).json({ error: 'Consent is required to submit booking' });
+        }
+
+    const days = Math.max(1, parseInt(numberOfDays, 10) || 0);
     const start = new Date(startDateTime);
+    if (isNaN(start)) return res.status(400).json({ error: 'Invalid startDateTime' });
     const end   = new Date(start);
     end.setDate(start.getDate() + days);
 
+    // 1) Hard overlap check
+    const conflict = await Booking.findOne(overlapQuery(bike, start, end)).lean();
+    if (conflict) {
+      return res.status(409).json({ error: 'Selected period overlaps another booking for this bike.' });
+    }
+
+    // 2) 2-hour buffer check vs neighbors
+    const TWO_HOURS = 2 * 60 * 60 * 1000;
+
+    const prev = await Booking.findOne({
+      ...sameBikeCriteria(bike),
+      endDateTime: { $lte: start },
+    }).sort({ endDateTime: -1 }).lean();
+
+    if (prev) {
+      const minStart = new Date(prev.endDateTime.getTime() + TWO_HOURS);
+      if (start < minStart) {
+        return res.status(409).json({
+          error: `Start must be at least 2 hours after the previous booking ends (${prev.endDateTime.toISOString()}).`,
+        });
+      }
+    }
+
+    const next = await Booking.findOne({
+      ...sameBikeCriteria(bike),
+      startDateTime: { $gte: end },
+    }).sort({ startDateTime: 1 }).lean();
+
+    if (next) {
+      const maxEnd = new Date(next.startDateTime.getTime() - TWO_HOURS);
+      if (end > maxEnd) {
+        return res.status(409).json({
+          error: `Return must be at least 2 hours before the next booking starts (${next.startDateTime.toISOString()}).`,
+        });
+      }
+    }
+
+    // Uploads (optional)
     const licenseKey = req.files.licenseFile
       ? await uploadToS3(req.files.licenseFile[0], firstName, lastName, 'License')
       : null;
@@ -357,7 +481,7 @@ router.post('/', auth, upload, async (req, res) => {
       ? await uploadToS3(req.files.passportFile[0], firstName, lastName, 'Passport')
       : null;
 
-    const totalPrice = calculatePrice(days, insurance, bike); // keep rental price separate from delivery
+    const totalPrice = calculatePrice(days, insurance, bike);
 
     // Init verification
     let verification = {
@@ -395,8 +519,6 @@ router.post('/', auth, upload, async (req, res) => {
       consentTextVersion: consentTextVersion || 'v1',
       dataRetentionDays: parseInt(dataRetentionDays || 90, 10),
       verification,
-
-      // persist delivery selection
       deliveryLocation,
       deliveryFee: Number(deliveryFee) || 0,
     }).save();
@@ -421,7 +543,10 @@ function requireAdmin(req, res, next) {
 // Admin-triggered reverify
 router.post('/:id/reverify', auth, requireAdmin, async (req, res) => {
   try {
-    const b = await Booking.findById(req.params.id);
+    const { id } = req.params;
+    if (!mongoose.isValidObjectId(id)) return res.status(400).json({ error: 'Invalid id' });
+
+    const b = await Booking.findById(id);
     if (!b) return res.status(404).json({ error: 'Not found' });
     if (!TEXTRACT_ENABLED) return res.status(400).json({ error: 'Textract disabled' });
 
@@ -442,24 +567,34 @@ router.post('/:id/reverify', auth, requireAdmin, async (req, res) => {
   }
 });
 
-// Admin override
+// Admin override (robust)
 router.patch('/:id/verification', auth, requireAdmin, async (req, res) => {
   try {
     const { id } = req.params;
-    const { status, license, passport, message } = req.body;
+    if (!mongoose.isValidObjectId(id)) return res.status(400).json({ error: 'Invalid id' });
 
-    const booking = await Booking.findById(id);
-    if (!booking) return res.status(404).json({ error: 'Booking not found' });
+    const { status, license, passport, message } = req.body || {};
+    const set = {};
+    if (typeof status === 'string') set['verification.status'] = status;
+    if (license && typeof license === 'object') {
+      if (typeof license.status === 'string') set['verification.license.status'] = license.status;
+      if (typeof license.reason === 'string') set['verification.license.reason'] = license.reason;
+      if (typeof license.score === 'number') set['verification.license.score'] = license.score;
+    }
+    if (passport && typeof passport === 'object') {
+      if (typeof passport.status === 'string') set['verification.passport.status'] = passport.status;
+      if (typeof passport.reason === 'string') set['verification.passport.reason'] = passport.reason;
+      if (typeof passport.score === 'number') set['verification.passport.score'] = passport.score;
+    }
 
-    if (status)   booking.verification.status   = status;
-    if (license)  booking.verification.license  = { ...booking.verification.license,  ...license  };
-    if (passport) booking.verification.passport = { ...booking.verification.passport, ...passport };
-    if (message)  booking.verification.log.push({ message });
+    const update = {
+      $set: { 'verification.updatedAt': new Date(), ...set },
+    };
+    if (message) update.$push = { 'verification.log': { message } };
 
-    booking.verification.updatedAt = new Date();
-    await booking.save();
-
-    res.json(booking);
+    const updated = await Booking.findByIdAndUpdate(id, update, { new: true, runValidators: false });
+    if (!updated) return res.status(404).json({ error: 'Booking not found' });
+    res.json(updated);
   } catch (err) {
     console.error('Verification update error:', err);
     res.status(500).json({ error: 'Failed to update verification' });
@@ -469,7 +604,10 @@ router.patch('/:id/verification', auth, requireAdmin, async (req, res) => {
 // Owner or admin can delete
 router.delete('/:id', auth, async (req, res) => {
   try {
-    const b = await Booking.findById(req.params.id);
+    const { id } = req.params;
+    if (!mongoose.isValidObjectId(id)) return res.status(400).json({ error: 'Invalid id' });
+
+    const b = await Booking.findById(id);
     if (!b) return res.status(404).json({ error: 'Not found' });
 
     const isOwner = String(b.userId) === String(req.user.id);

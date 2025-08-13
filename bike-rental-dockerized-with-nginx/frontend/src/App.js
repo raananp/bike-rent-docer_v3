@@ -1,5 +1,4 @@
-// ranan
-import React, { useContext } from 'react';
+import React, { useContext, useEffect } from 'react';
 import { Routes, Route, useLocation } from 'react-router-dom';
 import { AnimatePresence } from 'framer-motion';
 
@@ -9,49 +8,77 @@ import Admin from './pages/Admin';
 import Bikes from './pages/Bikes';
 import SignIn from './pages/SignIn';
 import SignUp from './pages/SignUp';
+import VerifyEmail from './pages/VerifyEmail';
+import SettingsSecurity from './pages/SettingsSecurity'; // NEW
 
 import Navbar from './components/Navbar';
 import ProtectedRoute from './components/ProtectedRoute';
 import { AuthProvider, AuthContext } from './context/AuthContext';
-import VerifyEmail from './pages/VerifyEmail';
+import { trackPageView } from './utils/analytics';
+
+function RouteTracker() {
+  const { pathname } = useLocation();
+  useEffect(() => {
+    trackPageView(pathname);
+  }, [pathname]);
+  return null;
+}
 
 function AppRoutes() {
   const location = useLocation();
   const { loading } = useContext(AuthContext);
 
-  if (loading) return null; // optionally show a spinner here
+  if (loading) return null; // optionally render a spinner or splash here
 
   return (
-    <AnimatePresence mode="wait" initial={false}>
-      <Routes location={location} key={location.pathname}>
-        <Route path="/" element={<Home />} />
-        <Route path="/bikes" element={<Bikes />} />
-        <Route path="/verify-email" element={<VerifyEmail />} />
+    <>
+      {/* Track page views OUTSIDE <Routes> */}
+      <RouteTracker />
 
-        {/* 🔒 Booking requires any logged-in user */}
-        <Route
-          path="/booking"
-          element={
-            <ProtectedRoute>
-              <Booking />
-            </ProtectedRoute>
-          }
-        />
+      <AnimatePresence mode="wait" initial={false}>
+        <Routes location={location} key={location.pathname}>
+          <Route path="/" element={<Home />} />
+          <Route path="/bikes" element={<Bikes />} />
+          <Route path="/verify-email" element={<VerifyEmail />} />
 
-        <Route path="/signup" element={<SignUp />} />
-        <Route path="/signin" element={<SignIn />} />
+          {/* 🔒 Booking requires any logged-in user */}
+          <Route
+            path="/booking"
+            element={
+              <ProtectedRoute>
+                <Booking />
+              </ProtectedRoute>
+            }
+          />
 
-        {/* 🔒 Admin requires role=admin */}
-        <Route
-          path="/admin"
-          element={
-            <ProtectedRoute requiredRole="admin">
-              <Admin />
-            </ProtectedRoute>
-          }
-        />
-      </Routes>
-    </AnimatePresence>
+          {/* 🔒 Settings (Security) requires login */}
+          <Route
+            path="/settings"
+            element={
+              <ProtectedRoute>
+                <SettingsSecurity />
+              </ProtectedRoute>
+            }
+          />
+
+          <Route path="/signup" element={<SignUp />} />
+          <Route path="/signin" element={<SignIn />} />
+
+          {/* 🔒 Admin requires role=admin */}
+          <Route
+            path="/admin"
+            element={
+              <ProtectedRoute requiredRole="admin">
+                <Admin />
+              </ProtectedRoute>
+            }
+          />
+
+          {/* 404 fallback: send unknown routes home */}
+          <Route path="*" element={<Home />} />
+        </Routes>
+      </AnimatePresence>
+    </>
   );
 }
 
